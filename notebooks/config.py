@@ -1,4 +1,10 @@
 import os, time
+from pathlib import Path
+
+BASE_DIR = Path(os.path.abspath(__file__)).resolve().parent
+
+#Ruta a datos provistos por la cátedra:
+RUTA_DATASET = BASE_DIR / "dataset.txt"
 
 # CONFIGURACION DE USUARIOS Y CONTRASEÑAS:
 USUARIOS = {
@@ -13,3 +19,10 @@ print("Esperando servicios (5s)...")
 time.sleep(5)
 
 
+MAPEO_RELACIONES = {
+    "USUARIOS_R":("amigos","sigue"),
+    "ARTISTAS_R":("similares",),
+    "LUGARES_R":(),
+    "EVENTOS_R":(),
+    "COMPRAS_R":()
+}
