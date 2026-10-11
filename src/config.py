@@ -30,6 +30,14 @@ RELATION_MAPPINGS: dict[str, tuple[str, ...]] = {
 }
 MAPEO_RELACIONES: dict[str, tuple[str, ...]] = RELATION_MAPPINGS  # Alias para compatibilidad
 
+# Reglas de negocio y constantes temporales
+REFERENCE_DATE: str = "2026-10-01"
+FECHA_REFERENCIA: str = REFERENCE_DATE  # Alias para compatibilidad
+
+SESSION_TTL_SECONDS: int = 1800        # 30 minutos
+RESERVATION_TTL_SECONDS: int = 600     # 10 minutos
+SEARCH_CACHE_TTL_SECONDS: int = 300    # 5 minutos
+
 
 def wait_for_services(seconds: int = 5) -> None:
     """Pausa la ejecución para dar tiempo a que los servicios de Docker inicialicen."""
