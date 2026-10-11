@@ -24,4 +24,4 @@ USER student
 EXPOSE 8888
 
 # Correr JupyterLab sin token/contraseña, útil para clase local
-CMD ["bash", "-lc", "jupyter lab --ip=0.0.0.0 --port=8888 --NotebookApp.token='' --NotebookApp.password='' --no-browser --NotebookApp.allow_origin='*' --NotebookApp.allow_remote_access=True"]
+CMD ["bash", "-lc", "jupyter lab --ip=0.0.0.0 --port=8888 --notebook-dir=/work/notebooks --NotebookApp.token='' --NotebookApp.password='' --no-browser --NotebookApp.allow_origin='*' --NotebookApp.allow_remote_access=True"]

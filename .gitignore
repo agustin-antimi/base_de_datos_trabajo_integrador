@@ -22,5 +22,5 @@ Thumbs.db
 .DS_Store
 
 
-# Ignorar txts:
-*.txt
+# Ignorar dataset de la cátedra:
+data/*.txt

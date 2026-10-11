@@ -9,9 +9,13 @@ services:
     ports:
       - "8888:8888"
     volumes:
-      - ./notebooks:/work
+      - ./notebooks:/work/notebooks
+      - ./src:/work/src
+      - ./data:/work/data
+      - ./scripts:/work/scripts
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/work/src
     networks:
       - classnet
 

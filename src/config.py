@@ -1,10 +1,13 @@
 import os, time
 from pathlib import Path
 
-BASE_DIR = Path(os.path.abspath(__file__)).resolve().parent
+# Directorios del proyecto (dentro del contenedor /work)
+SRC_DIR = Path(os.path.abspath(__file__)).resolve().parent   # /work/src
+PROJECT_DIR = SRC_DIR.parent                                  # /work
+DATA_DIR = PROJECT_DIR / "data"
 
 #Ruta a datos provistos por la cátedra:
-RUTA_DATASET = BASE_DIR / "dataset.txt"
+RUTA_DATASET = DATA_DIR / "dataset.txt"
 
 # CONFIGURACION DE USUARIOS Y CONTRASEÑAS:
 USUARIOS = {
