@@ -1,2 +1,22 @@
+# Variables de entorno y secretos
 .env
-.ipynb_checkpoints
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Python cache y bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales (por si alguna vez creás uno local)
+venv/
+.venv/
+env/
+
+# Configuración de editores / SO
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
