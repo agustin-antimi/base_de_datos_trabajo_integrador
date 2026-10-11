@@ -1,31 +1,38 @@
-import os, time
+import os
 from pathlib import Path
 
 # Directorios del proyecto (dentro del contenedor /work)
-SRC_DIR = Path(os.path.abspath(__file__)).resolve().parent   # /work/src
-PROJECT_DIR = SRC_DIR.parent                                  # /work
-DATA_DIR = PROJECT_DIR / "data"
+SRC_DIR: Path = Path(os.path.abspath(__file__)).resolve().parent  # /work/src
+PROJECT_DIR: Path = SRC_DIR.parent                                 # /work
+DATA_DIR: Path = PROJECT_DIR / "data"
 
-#Ruta a datos provistos por la cátedra:
-RUTA_DATASET = DATA_DIR / "dataset.txt"
+# Ruta a datos provistos por la cátedra
+DATASET_PATH: Path = DATA_DIR / "dataset.txt"
+RUTA_DATASET: Path = DATASET_PATH  # Alias para compatibilidad
 
-# CONFIGURACION DE USUARIOS Y CONTRASEÑAS:
-USUARIOS = {
+# Configuración de credenciales de servicios
+CREDENTIALS: dict[str, str] = {
     "NEO4J_USER": os.getenv("NEO4J_USER", "neo4j"),
     "NEO4J_PASSWORD": os.getenv("NEO4J_PASSWORD", "neo4j123"),
     "MONGO_USER": os.getenv("MONGO_INITDB_ROOT_USERNAME", "admin"),
     "MONGO_PASS": os.getenv("MONGO_INITDB_ROOT_PASSWORD", "admin123"),
     "REDIS_PASSWORD": os.getenv("REDIS_PASSWORD", "redis123"),
 }
+USUARIOS: dict[str, str] = CREDENTIALS  # Alias para compatibilidad
 
-print("Esperando servicios (5s)...")
-time.sleep(5)
-
-
-MAPEO_RELACIONES = {
-    "USUARIOS_R":("amigos","sigue"),
-    "ARTISTAS_R":("similares",),
-    "LUGARES_R":(),
-    "EVENTOS_R":(),
-    "COMPRAS_R":()
+# Mapeo de atributos que corresponden a relaciones de grafos (no a documentos en MongoDB)
+RELATION_MAPPINGS: dict[str, tuple[str, ...]] = {
+    "USUARIOS_R": ("amigos", "sigue"),
+    "ARTISTAS_R": ("similares",),
+    "LUGARES_R": (),
+    "EVENTOS_R": ("artistas",),
+    "COMPRAS_R": (),
 }
+MAPEO_RELACIONES: dict[str, tuple[str, ...]] = RELATION_MAPPINGS  # Alias para compatibilidad
+
+
+def wait_for_services(seconds: int = 5) -> None:
+    """Pausa la ejecución para dar tiempo a que los servicios de Docker inicialicen."""
+    import time
+    print(f"Esperando servicios ({seconds}s)...")
+    time.sleep(seconds)

@@ -1,9 +1,17 @@
+from pathlib import Path
+from typing import Any, Optional, Union
+
 import redis
 from neo4j import Driver
 from pymongo.database import Database
-from config import MAPEO_RELACIONES
 
-def clean_db(*bases):
+try:
+    from config import MAPEO_RELACIONES
+except ImportError:
+    from src.config import MAPEO_RELACIONES
+
+
+def clean_db(*bases: Union[Database, Driver, redis.Redis]) -> None:
     """Limpia las bases de datos específicas pasadas por parámetro."""
     for b in bases:
         # Caso MongoDB: recibe directamente el objeto Database
@@ -25,13 +33,17 @@ def clean_db(*bases):
         else:
             print(f"Tipo no soportado: {type(b)}")
 
-def process_user(users_list:list,db_mongo,driver_neo4j):
-    """Procesa la lista de usuarios y almacena los valores de cada registro en la base de datos correspondiente"""
+def process_user(
+    users_list: list[dict[str, Any]],
+    db_mongo: Database,
+    driver_neo4j: Driver,
+) -> None:
+    """Procesa la lista de usuarios y almacena los valores de cada registro en la base de datos correspondiente."""
     print("Se procesarán los usuarios:")
     if not users_list:
         return
-    
-    mongo_docs=[]
+
+    mongo_docs: list[dict[str, Any]] = []
     
     #Se procesan los usuarios dejando los documentos para insertar en mongo:
     for u in users_list:
@@ -76,41 +88,64 @@ def process_user(users_list:list,db_mongo,driver_neo4j):
     print("Usuarios procesados exitosamente")
 
     
-def process_artist(artists_list:list):
-    """Procesa la lista de artistas y almacena los valores de cada registro en la base de datos correspondiente"""
+def process_artist(
+    artists_list: list[dict[str, Any]],
+    db_mongo: Optional[Database] = None,
+    driver_neo4j: Optional[Driver] = None,
+) -> None:
+    """Procesa la lista de artistas y almacena los valores de cada registro en la base de datos correspondiente."""
     print("Se procesan artistas")
 
-def process_place(places_list:list):
-    """Procesa la lista de eventos y almacena los valores de cada registro en la base de datos correspondiente"""
+
+def process_place(
+    places_list: list[dict[str, Any]],
+    db_mongo: Optional[Database] = None,
+) -> None:
+    """Procesa la lista de lugares y almacena los valores de cada registro en la base de datos correspondiente."""
     print("Se procesan lugares")
 
 
-def process_event(events_list:list):
-    """Procesa la lista de eventos y almacena los valores de cada registro en la base de datos correspondiente"""
+def process_event(
+    events_list: list[dict[str, Any]],
+    db_mongo: Optional[Database] = None,
+    driver_neo4j: Optional[Driver] = None,
+    redis_client: Optional[redis.Redis] = None,
+) -> None:
+    """Procesa la lista de eventos y almacena los valores de cada registro en la base de datos correspondiente."""
     print("Se procesan eventos")
 
 
-def process_sale(sales_list:list):
-    """Procesa la lista de ventas y almacena los valores de cada registro en la base de datos correspondiente"""
+def process_sale(
+    sales_list: list[dict[str, Any]],
+    db_mongo: Optional[Database] = None,
+    driver_neo4j: Optional[Driver] = None,
+    redis_client: Optional[redis.Redis] = None,
+) -> None:
+    """Procesa la lista de ventas y almacena los valores de cada registro en la base de datos correspondiente."""
     print("Se procesan ventas")
 
 
-def load_raw_dataset(filepath):
-    """Lee el archivo .txt de datos y devuelve un diccionario con las listas"""
-    scope = {}
+def load_raw_dataset(filepath: Union[str, Path]) -> dict[str, Any]:
+    """Lee el archivo .txt de datos y devuelve un diccionario con las listas."""
+    scope: dict[str, Any] = {}
     with open(filepath, "r", encoding="utf-8") as f:
         code = f.read()
     exec(code, {}, scope)
     return scope
 
 
-def process_dataset(filepath, db_mongo, driver_neo4j, redis_client):
-    """Carga el archivo y procesa los registros de cada entidad"""
+def process_dataset(
+    filepath: Union[str, Path],
+    db_mongo: Database,
+    driver_neo4j: Driver,
+    redis_client: redis.Redis,
+) -> None:
+    """Carga el archivo y procesa los registros de cada entidad."""
     data = load_raw_dataset(filepath)
     print(data)
-    process_user(data.get("usuarios", []),db_mongo,driver_neo4j)
-    process_artist(data.get("artistas", []))
-    process_place(data.get("lugares", []))
-    process_event(data.get("eventos", []))
-    process_sale(data.get("compras", []))
+    process_user(data.get("usuarios", []), db_mongo, driver_neo4j)
+    process_artist(data.get("artistas", []), db_mongo, driver_neo4j)
+    process_place(data.get("lugares", []), db_mongo)
+    process_event(data.get("eventos", []), db_mongo, driver_neo4j, redis_client)
+    process_sale(data.get("compras", []), db_mongo, driver_neo4j, redis_client)
     print("Archivo procesado correctamente")
