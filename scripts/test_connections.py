@@ -1,36 +1,39 @@
-# test_connections.py
-# Pruebas mínimas de conexión a Neo4j, MongoDB y Redis desde Python dentro del contenedor.
-import os, time
+"""Pruebas mínimas de conexión a Neo4j, MongoDB y Redis desde Python dentro del contenedor."""
 
-NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4j123")
-MONGO_USER = os.getenv("MONGO_INITDB_ROOT_USERNAME", "admin")
-MONGO_PASS = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "admin123")
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "redis123")
+try:
+    from config import (
+        get_mongo_client,
+        get_neo4j_driver,
+        get_redis_client,
+        wait_for_services,
+    )
+except ImportError:
+    from src.config import (
+        get_mongo_client,
+        get_neo4j_driver,
+        get_redis_client,
+        wait_for_services,
+    )
 
-print("Esperando servicios (5s)...")
-time.sleep(5)
+# Esperar a que los servicios estén listos
+wait_for_services(5)
 
 # ---- Neo4j ----
-from neo4j import GraphDatabase
-neo4j_uri = "bolt://neo4j:7687"
-driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", NEO4J_PASSWORD))
-with driver.session() as s:
-    s.run("CREATE (:City {name:$name})", name="La Plata")
-    count = s.run("MATCH (n:City) RETURN count(n) AS c").single()["c"]
-    print(f"[Neo4j] nodos City: {count}")
+driver = get_neo4j_driver()
+with driver.session(database="neo4j") as session:
+    session.run("CREATE (:City {name:$name})", name="La Plata")
+    count = session.run("MATCH (n:City) RETURN count(n) AS c").single()["c"]
+    print(f"[Neo4j] Nodos City: {count}")
 driver.close()
 
 # ---- MongoDB ----
-from pymongo import MongoClient
-mongo_uri = f"mongodb://{MONGO_USER}:{MONGO_PASS}@mongo:27017/"
-client = MongoClient(mongo_uri)
-db = client["clase"]
-db.alumnos.insert_one({"nombre":"Edu","tema":"Grafos"})
-print(f"[MongoDB] alumnos: {db.alumnos.count_documents({})}")
+client = get_mongo_client()
+db = client["clase_test"]
+db.alumnos.insert_one({"nombre": "Edu", "tema": "Grafos"})
+print(f"[MongoDB] Documentos alumnos: {db.alumnos.count_documents({})}")
 client.close()
 
 # ---- Redis ----
-import redis
-r = redis.Redis(host="redis", port=6379, password=REDIS_PASSWORD, decode_responses=True)
-r.set("saludo","hola")
-print(f"[Redis] saludo = {r.get('saludo')}")
+redis_client = get_redis_client()
+redis_client.set("saludo", "hola")
+print(f"[Redis] Saludo = {redis_client.get('saludo')}")

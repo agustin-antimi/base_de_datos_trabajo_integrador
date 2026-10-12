@@ -56,6 +56,11 @@ Este documento define el contexto, las directrices de arquitectura y los estánd
    * Evitar scripts monolíticos o acoplamiento excesivo.
    * La lógica reutilizable de ingesta, transformación y consultas reside en módulos dentro del directorio `src/`.
    * Los notebooks en `notebooks/` se reservan para orquestación de alto nivel, experimentación interactiva y visualizaciones.
+5. **Cero Hardcoding de Datos y Parámetros (Prohibición Estricta de Hardcoding):**
+   * Queda estrictamente prohibido hardcodear datos de dominio (IDs de usuarios/eventos, nombres de personas, bandas, cantidades de entradas o precios) directamente en el cuerpo de las funciones de lógica.
+   * Toda función debe ser **parametrizable**, aceptando argumentos con valores por defecto centralizados en `src/config.py`.
+   * Si las consignas mencionan entidades por su nombre (ej. *"Lucía Romero"* o *"Los Cóndores Eléctricos"*), las funciones deben **resolver dinámicamente** sus IDs contra la base de datos (ej. consultando en MongoDB), nunca asumiendo IDs fijos en el código.
+   * URIs de conexión, nombres de bases de datos, colecciones y puertos deben configurarse en `src/config.py` o variables de entorno, exponiendo helpers de conexión reutilizables.
 
 ---
 

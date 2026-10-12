@@ -14,17 +14,27 @@ from pymongo.database import Database
 
 try:
     from config import (
+        INITIAL_GENRE_SEARCHES,
+        INITIAL_ONLINE_USERS,
+        INITIAL_UNCONFIRMED_RESERVATIONS,
         MAPEO_RELACIONES,
         REFERENCE_DATE,
-        SESSION_TTL_SECONDS,
+        RELATION_MAPPINGS,
         RESERVATION_TTL_SECONDS,
+        SEARCH_CACHE_TTL_SECONDS,
+        SESSION_TTL_SECONDS,
     )
 except ImportError:
     from src.config import (
+        INITIAL_GENRE_SEARCHES,
+        INITIAL_ONLINE_USERS,
+        INITIAL_UNCONFIRMED_RESERVATIONS,
         MAPEO_RELACIONES,
         REFERENCE_DATE,
-        SESSION_TTL_SECONDS,
+        RELATION_MAPPINGS,
         RESERVATION_TTL_SECONDS,
+        SEARCH_CACHE_TTL_SECONDS,
+        SESSION_TTL_SECONDS,
     )
 
 
@@ -108,17 +118,28 @@ def load_raw_dataset(filepath: Union[str, Path]) -> dict[str, Any]:
     return scope
 
 
-def insert_raw_data_to_mongo(raw_data: dict[str, Any], db_mongo: Database) -> None:
+def insert_raw_data_to_mongo(
+    raw_data: dict[str, Any],
+    db_mongo: Database,
+    target_collections: Optional[tuple[str, ...]] = None,
+) -> None:
     """Inserta el conjunto de datos completo y crudo en MongoDB como fuente de verdad inicial.
 
     Args:
         raw_data: Diccionario con listas de entidades extraídas del archivo de datos.
         db_mongo: Instancia de base de datos de MongoDB.
+        target_collections: Tupla opcional con nombres de colecciones a persistir.
+            Si no se especifica, persiste automáticamente todas las listas de entidades
+            presentes en raw_data.
     """
-    collections = ("usuarios", "artistas", "lugares", "eventos", "compras")
+    collections = (
+        target_collections
+        if target_collections is not None
+        else tuple(k for k, v in raw_data.items() if isinstance(v, list))
+    )
     for col_name in collections:
         items = raw_data.get(col_name, [])
-        if items:
+        if items and isinstance(items, list):
             collection = db_mongo[col_name]
             # Limpiar colección antes de insertar por si existían datos
             collection.delete_many({})
@@ -241,44 +262,96 @@ def populate_neo4j_from_mongo(db_mongo: Database, driver_neo4j: Driver) -> None:
             print(f"[Neo4j] {len(purchases)} compras asociadas entre usuarios y eventos.")
 
 
-def sanitize_mongo_collections(db_mongo: Database) -> None:
+def sanitize_mongo_collections(
+    db_mongo: Database,
+    relation_mappings: Optional[dict[str, tuple[str, ...]]] = None,
+) -> None:
     """Elimina de MongoDB los atributos relacionales que ya residen en Neo4j para evitar duplicación.
 
     Args:
         db_mongo: Instancia de base de datos de MongoDB a sanitizar.
+        relation_mappings: Mapeo opcional de atributos a desasociar por entidad.
+            Por defecto utiliza RELATION_MAPPINGS de config.py.
     """
-    res_usuarios = db_mongo.usuarios.update_many({}, {"$unset": {"amigos": "", "sigue": ""}})
-    res_artistas = db_mongo.artistas.update_many({}, {"$unset": {"similares": ""}})
-    res_eventos = db_mongo.eventos.update_many({}, {"$unset": {"artistas": ""}})
+    mappings = relation_mappings if relation_mappings is not None else RELATION_MAPPINGS
+    for key, fields in mappings.items():
+        if not fields:
+            continue
+        col_name = key.replace("_R", "").lower()
+        if col_name in db_mongo.list_collection_names():
+            unset_spec = {field: "" for field in fields}
+            res = db_mongo[col_name].update_many({}, {"$unset": unset_spec})
+            print(
+                f"[MongoDB Sanitización] Colección '{col_name}': "
+                f"removidos {fields} en {res.modified_count} documentos."
+            )
 
-    print(
-        f"[MongoDB Sanitización] Campos relacionales removidos: "
-        f"{res_usuarios.modified_count} usuarios, "
-        f"{res_artistas.modified_count} artistas, "
-        f"{res_eventos.modified_count} eventos."
-    )
 
-
-def populate_redis_initial_state(db_mongo: Database, redis_client: redis.Redis) -> None:
+def populate_redis_initial_state(
+    db_mongo: Database,
+    redis_client: redis.Redis,
+    online_users: Optional[list[Union[int, str]]] = None,
+    unconfirmed_reservations: Optional[list[dict[str, Any]]] = None,
+    genre_searches: Optional[dict[str, int]] = None,
+) -> None:
     """Inicializa en Redis el estado en tiempo real (cupos, sesiones activas, reservas y búsquedas).
 
     Args:
-        db_mongo: Instancia de base de datos de MongoDB para consultar eventos y compras.
+        db_mongo: Instancia de base de datos de MongoDB para consultar eventos, usuarios y compras.
         redis_client: Cliente de conexión a Redis donde se persisten los estados efímeros.
+        online_users: Lista opcional de identificadores (int) o nombres (str) de usuarios con sesión activa.
+            Si no se provee, utiliza INITIAL_ONLINE_USERS de config.py.
+        unconfirmed_reservations: Lista opcional de diccionarios con datos de reservas iniciales.
+            Cada reserva puede especificar 'user_name' o 'usuario_id', 'event_id' o 'evento_id',
+            y 'quantity' o 'cantidad'. Si no se provee, utiliza INITIAL_UNCONFIRMED_RESERVATIONS de config.py.
+        genre_searches: Diccionario opcional con cantidad de búsquedas iniciales por género.
+            Si no se provee, utiliza INITIAL_GENRE_SEARCHES de config.py.
     """
-    # 1. Cupos disponibles para eventos futuros
-    # Regla: Disponibles = cupo - compras confirmadas - reservas vigentes
-    initial_unconfirmed_reservations: dict[int, int] = {
-        5: 2,  # Lucía Romero: 2 entradas para evento 5
-        4: 3,  # Tomás Herrera: 3 entradas para evento 4
-    }
+    users_to_connect = online_users if online_users is not None else INITIAL_ONLINE_USERS
+    reservations_to_create = (
+        unconfirmed_reservations if unconfirmed_reservations is not None else INITIAL_UNCONFIRMED_RESERVATIONS
+    )
+    searches_to_register = genre_searches if genre_searches is not None else INITIAL_GENRE_SEARCHES
 
+    # 1. Registrar reservas sin confirmar acumulando entradas retenidas por evento
+    reserved_tickets_by_event: dict[int, int] = {}
+    for idx, res in enumerate(reservations_to_create, start=1):
+        # Resolver usuario dinámicamente por ID o por nombre contra MongoDB
+        user_id = res.get("usuario_id") or res.get("user_id")
+        if user_id is None:
+            user_name = res.get("user_name") or res.get("usuario_nombre") or res.get("user")
+            if user_name:
+                user_doc = db_mongo.usuarios.find_one({"nombre": str(user_name)})
+                if user_doc:
+                    user_id = user_doc.get("usuario_id")
+
+        event_id = res.get("evento_id") or res.get("event_id")
+        quantity = res.get("cantidad") or res.get("quantity", 0)
+
+        if event_id is not None:
+            reserved_tickets_by_event[event_id] = reserved_tickets_by_event.get(event_id, 0) + quantity
+
+        res_payload = {
+            "reservation_id": idx,
+            "usuario_id": user_id,
+            "evento_id": event_id,
+            "cantidad": quantity,
+        }
+        redis_client.set(f"reservation:{idx}", json.dumps(res_payload), ex=RESERVATION_TTL_SECONDS)
+
+    next_res_id = len(reservations_to_create) + 1
+    redis_client.set("reservation:next_id", next_res_id)
+    print(
+        f"[Redis] {len(reservations_to_create)} reservas sin confirmar registradas (TTL {RESERVATION_TTL_SECONDS}s)."
+    )
+
+    # 2. Cupos disponibles para eventos futuros (Disponibles = cupo - compras confirmadas - reservas vigentes)
     events = list(db_mongo.eventos.find({}, {"_id": 0}))
     for ev in events:
         eid = ev["evento_id"]
         confirmed_docs = db_mongo.compras.find({"evento_id": eid, "estado": "confirmada"})
         confirmed_tickets = sum(c.get("cantidad", 0) for c in confirmed_docs)
-        reserved_tickets = initial_unconfirmed_reservations.get(eid, 0)
+        reserved_tickets = reserved_tickets_by_event.get(eid, 0)
         available_stock = max(0, ev["cupo"] - confirmed_tickets - reserved_tickets)
 
         redis_client.set(f"event:{eid}:capacity", ev["cupo"])
@@ -286,42 +359,27 @@ def populate_redis_initial_state(db_mongo: Database, redis_client: redis.Redis) 
 
     print(f"[Redis] Cupos y capacidades inicializadas para {len(events)} eventos.")
 
-    # 2. Sesiones activas iniciales (TTL: 30 minutos = 1800 segundos)
-    # Sofía Martínez (1), Juan López (2), Tomás Herrera (6)
-    initial_online_users = [1, 2, 6]
-    for uid in initial_online_users:
-        session_payload = json.dumps({"user_id": uid, "status": "active"})
-        redis_client.set(f"session:user:{uid}", session_payload, ex=SESSION_TTL_SECONDS)
-    print(f"[Redis] {len(initial_online_users)} sesiones activas inicializadas (TTL 30m).")
+    # 3. Sesiones activas iniciales (TTL: SESSION_TTL_SECONDS)
+    connected_count = 0
+    for item in users_to_connect:
+        if isinstance(item, int):
+            uid = item
+        else:
+            # Buscar ID de usuario por nombre en MongoDB
+            user_doc = db_mongo.usuarios.find_one({"nombre": str(item)})
+            uid = user_doc.get("usuario_id") if user_doc else None
 
-    # 3. Reservas iniciales sin confirmar (TTL: 10 minutos = 600 segundos)
-    res_1 = {
-        "reservation_id": 1,
-        "usuario_id": 3,
-        "evento_id": 5,
-        "cantidad": 2,
-    }
-    redis_client.set("reservation:1", json.dumps(res_1), ex=RESERVATION_TTL_SECONDS)
+        if uid is not None:
+            session_payload = json.dumps({"user_id": uid, "status": "active"})
+            redis_client.set(f"session:user:{uid}", session_payload, ex=SESSION_TTL_SECONDS)
+            connected_count += 1
 
-    res_2 = {
-        "reservation_id": 2,
-        "usuario_id": 6,
-        "evento_id": 4,
-        "cantidad": 3,
-    }
-    redis_client.set("reservation:2", json.dumps(res_2), ex=RESERVATION_TTL_SECONDS)
-    redis_client.set("reservation:next_id", 3)
-    print("[Redis] 2 reservas sin confirmar inicializadas (TTL 10m).")
+    print(f"[Redis] {connected_count} sesiones activas inicializadas (TTL {SESSION_TTL_SECONDS}s).")
 
     # 4. Historial de búsquedas iniciales por género
-    initial_searches: dict[str, int] = {
-        "rock": 7,
-        "electrónica": 5,
-        "folk": 3,
-        "cumbia": 2,
-    }
-    redis_client.zadd("searches:genre", initial_searches)
-    print("[Redis] Contadores de búsquedas por género registrados.")
+    if searches_to_register:
+        redis_client.zadd("searches:genre", searches_to_register)
+        print(f"[Redis] Contadores de búsquedas registrados para {len(searches_to_register)} géneros.")
 
 
 def process_user(
@@ -538,6 +596,9 @@ def process_dataset(
     db_mongo: Database,
     driver_neo4j: Driver,
     redis_client: redis.Redis,
+    online_users: Optional[list[Union[int, str]]] = None,
+    unconfirmed_reservations: Optional[list[dict[str, Any]]] = None,
+    genre_searches: Optional[dict[str, int]] = None,
 ) -> None:
     """Coordina el flujo completo de persistencia políglota.
 
@@ -553,6 +614,9 @@ def process_dataset(
         db_mongo: Instancia de base de datos de MongoDB.
         driver_neo4j: Driver de conexión a Neo4j.
         redis_client: Cliente de conexión a Redis.
+        online_users: Lista opcional de identificadores o nombres de usuarios conectados inicialmente.
+        unconfirmed_reservations: Lista opcional de diccionarios con reservas iniciales sin confirmar.
+        genre_searches: Diccionario opcional con búsquedas acumuladas iniciales por género.
     """
     print("\n--- INICIANDO CARGA POLÍGLOTA DEL DATASET ---")
 
@@ -578,6 +642,12 @@ def process_dataset(
 
     # 6. Poblar Redis con estado inicial
     print("\n[Paso 5] Inicializando estados efímeros y stock en Redis...")
-    populate_redis_initial_state(db_mongo, redis_client)
+    populate_redis_initial_state(
+        db_mongo,
+        redis_client,
+        online_users=online_users,
+        unconfirmed_reservations=unconfirmed_reservations,
+        genre_searches=genre_searches,
+    )
 
     print("\n--- CARGA POLÍGLOTA FINALIZADA CON ÉXITO ---\n")
