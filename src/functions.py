@@ -38,6 +38,12 @@ except ImportError:
     )
 
 
+# ==============================================================================
+# CONSIGNAS: Requisitos Técnicos - Limpieza de las Tres Bases
+# "La primera sección del notebook debe limpiar las tres bases."
+# ==============================================================================
+
+
 def clean_db(*databases: Union[Database, Driver, redis.Redis]) -> None:
     """Limpia las bases de datos específicas pasadas por parámetro.
 
@@ -61,6 +67,12 @@ def clean_db(*databases: Union[Database, Driver, redis.Redis]) -> None:
 
         else:
             print(f"[Advertencia] Tipo de base de datos no soportado: {type(db)}")
+
+
+# ==============================================================================
+# CONSIGNAS: Requisitos Técnicos - Índices y Restricciones de Unicidad
+# "Crear los índices o restricciones de unicidad que consideren necesarios, y justificarlos."
+# ==============================================================================
 
 
 def create_mongo_indexes(db_mongo: Database) -> None:
@@ -93,6 +105,12 @@ def create_neo4j_constraints(driver_neo4j: Driver) -> None:
         for c in constraints:
             session.run(c)
     print("[Neo4j] Restricciones de unicidad verificadas/creadas con éxito.")
+
+
+# ==============================================================================
+# CONSIGNAS: Sección 1 - Carga Inicial (Extracción de Datos e Ingesta en MongoDB)
+# "Cargar el dataset del final distribuyendo la información entre las tres bases..."
+# ==============================================================================
 
 
 def load_raw_dataset(filepath: Union[str, Path]) -> dict[str, Any]:
@@ -145,6 +163,12 @@ def insert_raw_data_to_mongo(
             collection.delete_many({})
             collection.insert_many([dict(item) for item in items])
             print(f"[MongoDB] Colección '{col_name}': {len(items)} registros insertados.")
+
+
+# ==============================================================================
+# CONSIGNAS: Sección 1 - Carga Inicial en Neo4j (Construcción del Grafo)
+# "Los datos que existan en más de una base deben generarse a partir de los ya cargados..."
+# ==============================================================================
 
 
 def populate_neo4j_from_mongo(db_mongo: Database, driver_neo4j: Driver) -> None:
@@ -262,6 +286,12 @@ def populate_neo4j_from_mongo(db_mongo: Database, driver_neo4j: Driver) -> None:
             print(f"[Neo4j] {len(purchases)} compras asociadas entre usuarios y eventos.")
 
 
+# ==============================================================================
+# CONSIGNAS: Requisitos Técnicos - Evitar Duplicación Innecesaria
+# "Evitar la duplicación innecesaria de datos. Si deciden duplicar algo, justificarlo..."
+# ==============================================================================
+
+
 def sanitize_mongo_collections(
     db_mongo: Database,
     relation_mappings: Optional[dict[str, tuple[str, ...]]] = None,
@@ -285,6 +315,15 @@ def sanitize_mongo_collections(
                 f"[MongoDB Sanitización] Colección '{col_name}': "
                 f"removidos {fields} en {res.modified_count} documentos."
             )
+
+
+# ==============================================================================
+# CONSIGNAS: Sección 1 - Situación al Momento de la Carga Inicial en Redis
+# - Usuarios conectados (sesiones con TTL 30m)
+# - Reservas sin confirmar (TTL 10m)
+# - Disponibilidad: cupo - compras confirmadas - reservas vigentes
+# - Búsquedas realizadas hasta el momento por género
+# ==============================================================================
 
 
 def populate_redis_initial_state(
@@ -380,6 +419,11 @@ def populate_redis_initial_state(
     if searches_to_register:
         redis_client.zadd("searches:genre", searches_to_register)
         print(f"[Redis] Contadores de búsquedas registrados para {len(searches_to_register)} géneros.")
+
+
+# ==============================================================================
+# CONSIGNAS: Sección 1 - Carga Modular de Entidades (Usuarios, Artistas, Lugares, Eventos, Compras)
+# ==============================================================================
 
 
 def process_user(
@@ -589,6 +633,11 @@ def process_sale(
                 """,
                 compras=sales_list,
             )
+
+
+# ==============================================================================
+# CONSIGNAS: Sección 1 - Orquestación Completa del Pipeline de Carga Inicial
+# ==============================================================================
 
 
 def process_dataset(
