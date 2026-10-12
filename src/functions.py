@@ -357,14 +357,29 @@ def populate_redis_initial_state(
     for idx, res in enumerate(reservations_to_create, start=1):
         # Resolver usuario dinámicamente por ID o por nombre contra MongoDB
         user_id = res.get("usuario_id") or res.get("user_id")
-        if user_id is None:
-            user_name = res.get("user_name") or res.get("usuario_nombre") or res.get("user")
-            if user_name:
-                user_doc = db_mongo.usuarios.find_one({"nombre": str(user_name)})
-                if user_doc:
-                    user_id = user_doc.get("usuario_id")
+        user_name = res.get("user_name") or res.get("usuario_nombre") or res.get("user")
+        if user_id is None and user_name:
+            user_doc = db_mongo.usuarios.find_one({"nombre": str(user_name)})
+            if user_doc:
+                user_id = user_doc.get("usuario_id")
+        elif user_id is not None and not user_name:
+            user_doc = db_mongo.usuarios.find_one({"usuario_id": user_id})
+            if user_doc:
+                user_name = user_doc.get("nombre")
 
         event_id = res.get("evento_id") or res.get("event_id")
+        event_name = res.get("evento_nombre") or res.get("event_name") or res.get("event")
+        if event_id is None and event_name:
+            event_doc = db_mongo.eventos.find_one({"nombre": str(event_name)})
+            if event_doc:
+                event_id = event_doc.get("evento_id")
+        elif event_id is not None and not event_name:
+            event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+            if event_doc:
+                event_name = event_doc.get("nombre")
+
+        event_doc = db_mongo.eventos.find_one({"evento_id": event_id}) if event_id else None
+        price = int(event_doc.get("precio", 0)) if event_doc else 0
         quantity = res.get("cantidad") or res.get("quantity", 0)
 
         if event_id is not None:
@@ -373,13 +388,17 @@ def populate_redis_initial_state(
         res_payload = {
             "reservation_id": idx,
             "usuario_id": user_id,
+            "usuario_nombre": user_name,
             "evento_id": event_id,
+            "evento_nombre": event_name,
             "cantidad": quantity,
+            "precio_unitario": price,
         }
         redis_client.set(f"reservation:{idx}", json.dumps(res_payload), ex=RESERVATION_TTL_SECONDS)
 
-    next_res_id = len(reservations_to_create) + 1
-    redis_client.set("reservation:next_id", next_res_id)
+    # El contador reservation:next_id almacena el último ID utilizado para que redis.incr devuelva el siguiente consecutivo
+    last_res_id = len(reservations_to_create)
+    redis_client.set("reservation:next_id", last_res_id)
     print(
         f"[Redis] {len(reservations_to_create)} reservas sin confirmar registradas (TTL {RESERVATION_TTL_SECONDS}s)."
     )
@@ -419,6 +438,79 @@ def populate_redis_initial_state(
     if searches_to_register:
         redis_client.zadd("searches:genre", searches_to_register)
         print(f"[Redis] Contadores de búsquedas registrados para {len(searches_to_register)} géneros.")
+
+
+# ==============================================================================
+# CONSIGNAS: Reglas de Negocio - Cálculo Dinámico de Disponibilidad y Sincronización
+# "Disponibles = cupo - compras confirmadas - reservas vigentes (nunca negativo)"
+# ==============================================================================
+
+
+def get_event_available_stock(
+    event_id: int,
+    db_mongo: Database,
+    redis_client: redis.Redis,
+) -> int:
+    """Calcula la cantidad de entradas disponibles en tiempo real para un evento.
+
+    Aplica la fórmula oficial de las consignas:
+    Disponibles = cupo - compras confirmadas - reservas vigentes en Redis.
+    Al vencer una reserva por TTL (10 min), Redis elimina la clave y sus entradas
+    se liberan solas, recalculándose la disponibilidad automáticamente.
+
+    Args:
+        event_id: Identificador numérico del evento.
+        db_mongo: Instancia de base de datos de MongoDB.
+        redis_client: Cliente de conexión a Redis.
+
+    Returns:
+        Cantidad entera de entradas disponibles (nunca menor a 0).
+    """
+    event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    if not event_doc:
+        return 0
+    total_capacity = int(event_doc.get("cupo", 0))
+
+    # 1. Compras confirmadas en MongoDB
+    confirmed_docs = db_mongo.compras.find({"evento_id": event_id, "estado": "confirmada"})
+    confirmed_tickets = sum(int(c.get("cantidad", 0)) for c in confirmed_docs)
+
+    # 2. Reservas vigentes en Redis (las que aún no expiraron)
+    active_reserved_tickets = 0
+    for key in redis_client.scan_iter("reservation:*"):
+        if key == "reservation:next_id":
+            continue
+        raw_res = redis_client.get(key)
+        if raw_res:
+            try:
+                res_data = json.loads(raw_res)
+                if int(res_data.get("evento_id", -1)) == event_id:
+                    active_reserved_tickets += int(res_data.get("cantidad", 0))
+            except (json.JSONDecodeError, ValueError, TypeError):
+                continue
+
+    available = max(0, total_capacity - confirmed_tickets - active_reserved_tickets)
+    return available
+
+
+def sync_event_stock(
+    event_id: int,
+    db_mongo: Database,
+    redis_client: redis.Redis,
+) -> int:
+    """Sincroniza y actualiza la clave event:{event_id}:stock en Redis con la disponibilidad real.
+
+    Args:
+        event_id: Identificador numérico del evento.
+        db_mongo: Instancia de base de datos de MongoDB.
+        redis_client: Cliente de conexión a Redis.
+
+    Returns:
+        Nuevo stock disponible actualizado y persistido en Redis.
+    """
+    available = get_event_available_stock(event_id, db_mongo, redis_client)
+    redis_client.set(f"event:{event_id}:stock", available)
+    return available
 
 
 # ==============================================================================

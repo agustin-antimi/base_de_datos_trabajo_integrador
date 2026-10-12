@@ -344,12 +344,22 @@ def confirm_reservation(
     # 3. Eliminar la reserva de Redis (las entradas ya quedan definitivamente compradas)
     redis_client.delete(res_key)
 
+    # Resolver nombres si no venían en el payload original
+    usuario_nombre = res_info.get("usuario_nombre")
+    if not usuario_nombre:
+        user_doc = db_mongo.usuarios.find_one({"usuario_id": user_id})
+        usuario_nombre = user_doc.get("nombre") if user_doc else f"Usuario #{user_id}"
+
+    evento_nombre = res_info.get("evento_nombre")
+    if not evento_nombre:
+        evento_nombre = event_doc.get("nombre", f"Evento #{event_id}")
+
     return {
         "compra_id": new_compra_id,
         "usuario_id": user_id,
-        "usuario_nombre": res_info.get("usuario_nombre"),
+        "usuario_nombre": usuario_nombre,
         "evento_id": event_id,
-        "evento_nombre": res_info.get("evento_nombre"),
+        "evento_nombre": evento_nombre,
         "cantidad": quantity,
         "precio_unitario": current_price,
         "total": total_amount,
@@ -449,11 +459,11 @@ def demonstrate_purchase_flow(
 
     # ------------------------------------------------------------------
     # CASO 1: Compra exitosa completa
-    # ------------------------------------------------------------------
     print("\n--- CASO 1: Demostración de Compra Exitosa ---")
-    test_event_name = "Fiesta Satelital"  # Evento 6
-    stock_before = int(redis_client.get("event:6:stock") or 0)
-    print(f"Stock inicial para '{test_event_name}': {stock_before}")
+    test_event_name = "Fiesta Satelital"
+    test_event_id, _, _, _ = resolve_event(db_mongo, test_event_name)
+    stock_before = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
+    print(f"Stock inicial para '{test_event_name}' (ID {test_event_id}): {stock_before}")
 
     # Paso 1.1: Reservar 2 entradas
     res_1 = reserve_tickets(
@@ -464,7 +474,7 @@ def demonstrate_purchase_flow(
         redis_client=redis_client,
     )
     print(f"[Paso 1 - Reserva] {res_1['mensaje']}")
-    stock_after_res = int(redis_client.get("event:6:stock") or 0)
+    stock_after_res = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
     print(f"Stock luego de reservar 2 entradas: {stock_after_res}")
 
     # Paso 1.2: Confirmar la reserva
@@ -485,7 +495,7 @@ def demonstrate_purchase_flow(
     # CASO 2: Intento sin disponibilidad suficiente
     # ------------------------------------------------------------------
     print("\n--- CASO 2: Demostración de Intento Sin Disponibilidad Suficiente ---")
-    current_avail = int(redis_client.get("event:6:stock") or 0)
+    current_avail = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
     excessive_qty = current_avail + 500  # Más de lo que existe
     print(f"Stock disponible: {current_avail}. Se intentarán reservar: {excessive_qty}.")
 
@@ -500,7 +510,7 @@ def demonstrate_purchase_flow(
         results["caso_2_sin_disponibilidad"] = {"error": "No falló como se esperaba"}
     except RuntimeError as err:
         print(f"[Rechazo Correcto]: {err}")
-        stock_unchanged = int(redis_client.get("event:6:stock") or 0)
+        stock_unchanged = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
         print(f"Verificación de stock intacto: {stock_unchanged}")
         results["caso_2_sin_disponibilidad"] = {
             "error_capturado": str(err),
@@ -512,7 +522,7 @@ def demonstrate_purchase_flow(
     # CASO 3: Cancelación liberando entradas
     # ------------------------------------------------------------------
     print("\n--- CASO 3: Demostración de Cancelación Liberando Entradas ---")
-    stock_pre_cancel = int(redis_client.get("event:6:stock") or 0)
+    stock_pre_cancel = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
     print(f"Stock antes de reservar: {stock_pre_cancel}")
 
     # Paso 3.1: Crear reserva temporal
@@ -523,7 +533,7 @@ def demonstrate_purchase_flow(
         db_mongo=db_mongo,
         redis_client=redis_client,
     )
-    stock_during = int(redis_client.get("event:6:stock") or 0)
+    stock_during = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
     print(f"[Reserva Creada] ID #{res_cancel['reserva_id']} por 3 entradas. Stock actual: {stock_during}")
 
     # Paso 3.2: Cancelar la reserva
@@ -532,7 +542,7 @@ def demonstrate_purchase_flow(
         redis_client=redis_client,
     )
     print(f"[Cancelación] {cancel_res['mensaje']}")
-    stock_post_cancel = int(redis_client.get("event:6:stock") or 0)
+    stock_post_cancel = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
     print(f"Stock restituido: {stock_post_cancel} (igual al inicial: {stock_post_cancel == stock_pre_cancel})")
 
     results["caso_3_cancelacion"] = {
