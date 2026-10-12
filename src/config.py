@@ -40,7 +40,11 @@ SEARCH_CACHE_TTL_SECONDS: int = 300    # 5 minutos
 
 
 def wait_for_services(seconds: int = 5) -> None:
-    """Pausa la ejecución para dar tiempo a que los servicios de Docker inicialicen."""
+    """Pausa la ejecución para dar tiempo a que los servicios de Docker inicialicen.
+
+    Args:
+        seconds: Cantidad de segundos a esperar antes de continuar. Por defecto 5.
+    """
     import time
     print(f"Esperando servicios ({seconds}s)...")
     time.sleep(seconds)

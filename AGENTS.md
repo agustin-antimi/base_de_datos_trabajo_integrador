@@ -20,9 +20,39 @@ Este documento define el contexto, las directrices de arquitectura y los estánd
 1. **Lenguaje del Código:**
    * **Identificadores en Inglés:** Nombres de variables, funciones, clases, métodos, módulos, constantes y nombres de nuevos archivos deben estar redactados en **inglés** (ej. `fetch_user_by_id`, `event_payload`, `batch_size`).
    * **Comentarios y Docstrings en Español:** Todo comentario aclaratorio, documentación de funciones, módulos y clases debe escribirse en **español** formal y conciso.
-2. **Tipado Estricto (Type Hints):**
+2. **Docstrings en Estilo Google:**
+   * Todas las funciones, métodos y clases deben documentarse utilizando el formato **Google Style**:
+     * Breve resumen en una línea.
+     * Descripción extendida opcional.
+     * Sección `Args:` detallando cada parámetro y su propósito.
+     * Sección `Returns:` detallando el valor de retorno.
+     * Sección `Raises:` detallando las excepciones lanzadas (si aplica).
+   * **Ejemplo de referencia:**
+     ```python
+     def reserve_tickets(
+         user_id: int,
+         event_id: int,
+         quantity: int,
+         redis_client: redis.Redis,
+     ) -> bool:
+         """Crea una reserva temporal de entradas si hay stock y sesión activa.
+
+         Args:
+             user_id: Identificador único del usuario que realiza la reserva.
+             event_id: Identificador del evento para el cual se reservan entradas.
+             quantity: Cantidad de entradas solicitadas.
+             redis_client: Cliente de conexión a Redis.
+
+         Returns:
+             True si la reserva se creó exitosamente, False en caso contrario.
+
+         Raises:
+             ValueError: Si la cantidad solicitada es menor o igual a cero.
+         """
+     ```
+3. **Tipado Estricto (Type Hints):**
    * Todo parámetro y valor de retorno de funciones y métodos debe contar con anotaciones de tipo explícitas (`list[dict[str, Any]]`, `Optional[Driver]`, `tuple[int, ...]` aprovechando Python 3.11+).
-3. **Modularidad y Separación de Responsabilidades:**
+4. **Modularidad y Separación de Responsabilidades:**
    * Evitar scripts monolíticos o acoplamiento excesivo.
    * La lógica reutilizable de ingesta, transformación y consultas reside en módulos dentro del directorio `src/`.
    * Los notebooks en `notebooks/` se reservan para orquestación de alto nivel, experimentación interactiva y visualizaciones.

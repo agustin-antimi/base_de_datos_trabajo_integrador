@@ -29,7 +29,12 @@ except ImportError:
 
 
 def clean_db(*databases: Union[Database, Driver, redis.Redis]) -> None:
-    """Limpia las bases de datos específicas pasadas por parámetro."""
+    """Limpia las bases de datos específicas pasadas por parámetro.
+
+    Args:
+        *databases: Instancias de conexión a bases de datos (Database de PyMongo,
+            Driver de Neo4j o Redis de redis-py).
+    """
     for db in databases:
         if isinstance(db, Database):
             db.client.drop_database(db.name)
@@ -49,7 +54,11 @@ def clean_db(*databases: Union[Database, Driver, redis.Redis]) -> None:
 
 
 def create_mongo_indexes(db_mongo: Database) -> None:
-    """Crea los índices y restricciones de unicidad en las colecciones de MongoDB."""
+    """Crea los índices y restricciones de unicidad en las colecciones de MongoDB.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+    """
     db_mongo.usuarios.create_index("usuario_id", unique=True)
     db_mongo.artistas.create_index("artista_id", unique=True)
     db_mongo.lugares.create_index("lugar_id", unique=True)
@@ -59,7 +68,11 @@ def create_mongo_indexes(db_mongo: Database) -> None:
 
 
 def create_neo4j_constraints(driver_neo4j: Driver) -> None:
-    """Crea las restricciones de unicidad sobre los identificadores en Neo4j."""
+    """Crea las restricciones de unicidad sobre los identificadores en Neo4j.
+
+    Args:
+        driver_neo4j: Driver de conexión a la base de grafos Neo4j.
+    """
     constraints = [
         "CREATE CONSTRAINT IF NOT EXISTS FOR (u:Usuario) REQUIRE u.id IS UNIQUE",
         "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Artista) REQUIRE a.id IS UNIQUE",
@@ -73,7 +86,17 @@ def create_neo4j_constraints(driver_neo4j: Driver) -> None:
 
 
 def load_raw_dataset(filepath: Union[str, Path]) -> dict[str, Any]:
-    """Lee el archivo .txt de datos y devuelve un diccionario con las entidades crudas."""
+    """Lee el archivo .txt de datos y devuelve un diccionario con las entidades crudas.
+
+    Args:
+        filepath: Ruta hacia el archivo .txt con la definición de listas de datos.
+
+    Returns:
+        Diccionario con las listas crudas de usuarios, artistas, lugares, eventos y compras.
+
+    Raises:
+        FileNotFoundError: Si el archivo no existe en la ruta provista.
+    """
     scope: dict[str, Any] = {}
     path_obj = Path(filepath)
     if not path_obj.exists():
@@ -86,7 +109,12 @@ def load_raw_dataset(filepath: Union[str, Path]) -> dict[str, Any]:
 
 
 def insert_raw_data_to_mongo(raw_data: dict[str, Any], db_mongo: Database) -> None:
-    """Inserta el conjunto de datos completo y crudo en MongoDB como fuente de verdad inicial."""
+    """Inserta el conjunto de datos completo y crudo en MongoDB como fuente de verdad inicial.
+
+    Args:
+        raw_data: Diccionario con listas de entidades extraídas del archivo de datos.
+        db_mongo: Instancia de base de datos de MongoDB.
+    """
     collections = ("usuarios", "artistas", "lugares", "eventos", "compras")
     for col_name in collections:
         items = raw_data.get(col_name, [])
@@ -99,7 +127,12 @@ def insert_raw_data_to_mongo(raw_data: dict[str, Any], db_mongo: Database) -> No
 
 
 def populate_neo4j_from_mongo(db_mongo: Database, driver_neo4j: Driver) -> None:
-    """Lee las entidades y relaciones almacenadas en MongoDB y construye el grafo en Neo4j."""
+    """Lee las entidades y relaciones almacenadas en MongoDB y construye el grafo en Neo4j.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB de donde se leen los datos.
+        driver_neo4j: Driver de conexión a Neo4j para ejecutar las mutaciones Cypher.
+    """
     with driver_neo4j.session(database="neo4j") as session:
         # 1. Artistas y relaciones de similitud
         artists = list(db_mongo.artistas.find({}, {"_id": 0}))
@@ -209,7 +242,11 @@ def populate_neo4j_from_mongo(db_mongo: Database, driver_neo4j: Driver) -> None:
 
 
 def sanitize_mongo_collections(db_mongo: Database) -> None:
-    """Elimina de MongoDB los atributos relacionales que ya residen en Neo4j para evitar duplicación."""
+    """Elimina de MongoDB los atributos relacionales que ya residen en Neo4j para evitar duplicación.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB a sanitizar.
+    """
     res_usuarios = db_mongo.usuarios.update_many({}, {"$unset": {"amigos": "", "sigue": ""}})
     res_artistas = db_mongo.artistas.update_many({}, {"$unset": {"similares": ""}})
     res_eventos = db_mongo.eventos.update_many({}, {"$unset": {"artistas": ""}})
@@ -223,7 +260,12 @@ def sanitize_mongo_collections(db_mongo: Database) -> None:
 
 
 def populate_redis_initial_state(db_mongo: Database, redis_client: redis.Redis) -> None:
-    """Inicializa en Redis el estado en tiempo real (cupos, sesiones activas, reservas y búsquedas)."""
+    """Inicializa en Redis el estado en tiempo real (cupos, sesiones activas, reservas y búsquedas).
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB para consultar eventos y compras.
+        redis_client: Cliente de conexión a Redis donde se persisten los estados efímeros.
+    """
     # 1. Cupos disponibles para eventos futuros
     # Regla: Disponibles = cupo - compras confirmadas - reservas vigentes
     initial_unconfirmed_reservations: dict[int, int] = {
@@ -287,7 +329,13 @@ def process_user(
     db_mongo: Database,
     driver_neo4j: Driver,
 ) -> None:
-    """Procesa e ingesta usuarios en MongoDB y Neo4j de forma modular."""
+    """Procesa e ingesta usuarios en MongoDB y Neo4j de forma modular.
+
+    Args:
+        users_list: Lista de diccionarios con datos de usuarios.
+        db_mongo: Instancia de base de datos de MongoDB.
+        driver_neo4j: Driver de conexión a Neo4j.
+    """
     if not users_list:
         return
     db_mongo.usuarios.delete_many({})
@@ -331,7 +379,13 @@ def process_artist(
     db_mongo: Optional[Database] = None,
     driver_neo4j: Optional[Driver] = None,
 ) -> None:
-    """Procesa e ingesta artistas en MongoDB y Neo4j de forma modular."""
+    """Procesa e ingesta artistas en MongoDB y Neo4j de forma modular.
+
+    Args:
+        artists_list: Lista de diccionarios con datos de artistas.
+        db_mongo: Instancia de base de datos de MongoDB (opcional).
+        driver_neo4j: Driver de conexión a Neo4j (opcional).
+    """
     if not artists_list or db_mongo is None or driver_neo4j is None:
         return
     db_mongo.artistas.delete_many({})
@@ -365,7 +419,13 @@ def process_place(
     db_mongo: Optional[Database] = None,
     driver_neo4j: Optional[Driver] = None,
 ) -> None:
-    """Procesa e ingesta lugares en MongoDB y Neo4j de forma modular."""
+    """Procesa e ingesta lugares en MongoDB y Neo4j de forma modular.
+
+    Args:
+        places_list: Lista de diccionarios con datos de lugares.
+        db_mongo: Instancia de base de datos de MongoDB (opcional).
+        driver_neo4j: Driver de conexión a Neo4j (opcional).
+    """
     if not places_list or db_mongo is None:
         return
     db_mongo.lugares.delete_many({})
@@ -389,7 +449,14 @@ def process_event(
     driver_neo4j: Optional[Driver] = None,
     redis_client: Optional[redis.Redis] = None,
 ) -> None:
-    """Procesa e ingesta eventos en MongoDB y Neo4j de forma modular."""
+    """Procesa e ingesta eventos en MongoDB y Neo4j de forma modular.
+
+    Args:
+        events_list: Lista de diccionarios con datos de eventos.
+        db_mongo: Instancia de base de datos de MongoDB (opcional).
+        driver_neo4j: Driver de conexión a Neo4j (opcional).
+        redis_client: Cliente de conexión a Redis (opcional).
+    """
     if not events_list or db_mongo is None:
         return
     db_mongo.eventos.delete_many({})
@@ -435,7 +502,14 @@ def process_sale(
     driver_neo4j: Optional[Driver] = None,
     redis_client: Optional[redis.Redis] = None,
 ) -> None:
-    """Procesa e ingesta compras en MongoDB y Neo4j de forma modular."""
+    """Procesa e ingesta compras en MongoDB y Neo4j de forma modular.
+
+    Args:
+        sales_list: Lista de diccionarios con datos de compras.
+        db_mongo: Instancia de base de datos de MongoDB (opcional).
+        driver_neo4j: Driver de conexión a Neo4j (opcional).
+        redis_client: Cliente de conexión a Redis (opcional).
+    """
     if not sales_list or db_mongo is None:
         return
     db_mongo.compras.delete_many({})
@@ -465,13 +539,20 @@ def process_dataset(
     driver_neo4j: Driver,
     redis_client: redis.Redis,
 ) -> None:
-    """Coordina el flujo completo de persistencia políglota:
+    """Coordina el flujo completo de persistencia políglota.
 
+    Ejecuta las etapas en orden:
     1. Carga cruda del dataset en MongoDB como base principal.
     2. Creación de índices y restricciones en MongoDB y Neo4j.
     3. Construcción del grafo en Neo4j a partir de los datos en MongoDB.
     4. Sanitización de colecciones en MongoDB eliminando atributos relacionales duplicados.
     5. Inicialización de estado en tiempo real (stock, sesiones, reservas y búsquedas) en Redis.
+
+    Args:
+        filepath: Ruta hacia el archivo .txt con el conjunto de datos.
+        db_mongo: Instancia de base de datos de MongoDB.
+        driver_neo4j: Driver de conexión a Neo4j.
+        redis_client: Cliente de conexión a Redis.
     """
     print("\n--- INICIANDO CARGA POLÍGLOTA DEL DATASET ---")
 
