@@ -159,7 +159,7 @@ def build_genre_searches_stats(
     formatted_items: list[dict[str, Any]] = []
 
     if raw_records and isinstance(raw_records[0], tuple):
-        for tuple_item in raw_records:
+        for tuple_itemb in raw_records:
             genre_name = str(tuple_item[0]).capitalize()
             count = int(tuple_item[1])
             total_searches += count

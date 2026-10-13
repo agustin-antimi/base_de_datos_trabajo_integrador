@@ -430,6 +430,8 @@ def demonstrate_purchase_flow(
     db_mongo: Database,
     driver_neo4j: Driver,
     redis_client: redis.Redis,
+    test_user: str = "Juan López",
+    test_event: str = "Fiesta Satelital",
 ) -> dict[str, Any]:
     """Ejecuta y demuestra los tres casos exigidos por las consignas:
 
@@ -441,6 +443,10 @@ def demonstrate_purchase_flow(
         db_mongo: Instancia de base de datos de MongoDB.
         driver_neo4j: Driver de conexión a Neo4j.
         redis_client: Cliente de conexión a Redis.
+        test_user: Nombre o ID del usuario de prueba. Por defecto resuelve dinámicamente
+            desde MongoDB. Corresponde a 'Juan López' según las consignas del TP.
+        test_event: Nombre o ID del evento de prueba. Por defecto resuelve dinámicamente
+            desde MongoDB. Corresponde a 'Fiesta Satelital' según las consignas del TP.
 
     Returns:
         Diccionario con los resultados detallados de cada uno de los tres casos.
@@ -451,15 +457,14 @@ def demonstrate_purchase_flow(
     print(" DEMOSTRACIÓN DEL FLUJO DE COMPRA (CONSIGNAS: SECCIÓN 2)")
     print("=======================================================")
 
-    # Asegurar sesión activa para el usuario de prueba
-    test_user_name = "Juan López"
+    # Asegurar sesión activa para el usuario de prueba (resuelto dinámicamente)
+    test_user_name = resolve_user(db_mongo, test_user)[1]
     create_user_session(test_user_name, db_mongo, redis_client)
 
     # ------------------------------------------------------------------
     # CASO 1: Compra exitosa completa
     print("\n--- CASO 1: Demostración de Compra Exitosa ---")
-    test_event_name = "Fiesta Satelital"
-    test_event_id, _, _, _ = resolve_event(db_mongo, test_event_name)
+    test_event_id, test_event_name, _, _ = resolve_event(db_mongo, test_event)
     stock_before = int(redis_client.get(f"event:{test_event_id}:stock") or 0)
     print(f"Stock inicial para '{test_event_name}' (ID {test_event_id}): {stock_before}")
 
