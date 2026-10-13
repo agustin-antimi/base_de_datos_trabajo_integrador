@@ -78,6 +78,17 @@ INITIAL_GENRE_SEARCHES: dict[str, int] = {
     "cumbia": 2,
 }
 
+# Parámetros y valores por defecto para la sección 5 (Modificaciones)
+DEFAULT_PRICE_INCREASE_PERCENTAGE: float = 10.0
+DEFAULT_PRICE_INCREASE_CITY: str = "Rosario"
+DEFAULT_SERVICE_NAME: str = "accesibilidad"
+DEFAULT_SERVICE_PLACE_ID: int = 2
+DEFAULT_CANCEL_EVENT_ID: int = 7
+DEFAULT_DELETE_USER_NAME: str = "Tomás Herrera"
+DEFAULT_DELETE_USER_ID: int = 6
+DEFAULT_REMOVE_FRIENDS_USER_NAME: str = "Juan López"
+DEFAULT_REMOVE_FRIENDS_USER_ID: int = 2
+
 
 def _is_running_in_docker() -> bool:
     """Verifica si el proceso actual se ejecuta dentro de un contenedor Docker.
