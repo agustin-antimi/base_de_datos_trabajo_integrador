@@ -1,0 +1,50 @@
+usuarios = [
+    {"usuario_id": 1, "nombre": "Sofía Martínez", "email": "sofia.martinez@example.com", "ciudad": "La Plata", "amigos": [2, 3], "sigue": [2, 5]},
+    {"usuario_id": 2, "nombre": "Juan López", "email": "juan.lopez@example.com", "ciudad": "La Plata", "amigos": [1, 4, 5], "sigue": [1, 3]},
+    {"usuario_id": 3, "nombre": "Lucía Romero", "email": "lucia.romero@example.com", "ciudad": "CABA", "amigos": [1, 6], "sigue": [2, 4]},
+    {"usuario_id": 4, "nombre": "Martín Díaz", "email": "martin.diaz@example.com", "ciudad": "Rosario", "amigos": [2], "sigue": [3, 6]},
+    {"usuario_id": 5, "nombre": "Valentina Ruiz", "email": "valentina.ruiz@example.com", "ciudad": "Córdoba", "amigos": [2], "sigue": [1, 4, 6]},
+    {"usuario_id": 6, "nombre": "Tomás Herrera", "email": "tomas.herrera@example.com", "ciudad": "La Plata", "amigos": [3], "sigue": [3, 6]}
+]
+
+artistas = [
+    {"artista_id": 1, "nombre": "Los Cóndores Eléctricos", "genero": "rock", "similares": [6]},
+    {"artista_id": 2, "nombre": "La Marea Sur", "genero": "folk", "similares": [5]},
+    {"artista_id": 3, "nombre": "Pulso Nocturno", "genero": "electrónica", "similares": [4]},
+    {"artista_id": 4, "nombre": "Cumbia Satelital", "genero": "cumbia", "similares": [3]},
+    {"artista_id": 5, "nombre": "Viento Norte", "genero": "folk", "similares": [2]},
+    {"artista_id": 6, "nombre": "Radio Neón", "genero": "rock", "similares": [1]}
+]
+
+lugares = [
+    {"lugar_id": 1, "nombre": "Estadio Ciudad", "ciudad": "La Plata", "capacidad": 40000, "servicios": ["estacionamiento", "accesibilidad"]},
+    {"lugar_id": 2, "nombre": "Sala Diagonal", "ciudad": "La Plata", "capacidad": 800, "servicios": ["bar"]},
+    {"lugar_id": 3, "nombre": "Anfiteatro del Lago", "ciudad": "Córdoba", "capacidad": 5000, "servicios": ["bar", "accesibilidad"]},
+    {"lugar_id": 4, "nombre": "Club Río", "ciudad": "Rosario", "capacidad": 2000, "servicios": ["bar", "guardarropa"]}
+]
+
+eventos = [
+    {"evento_id": 1, "nombre": "Cóndores en vivo", "artistas": [1], "lugar_id": 1, "fecha": "2026-05-10", "genero": "rock", "precio": 45000, "cupo": 500, "estado": "activo"},
+    {"evento_id": 2, "nombre": "Marea acústica", "artistas": [2], "lugar_id": 2, "fecha": "2026-06-20", "genero": "folk", "precio": 18000, "cupo": 150, "estado": "activo"},
+    {"evento_id": 3, "nombre": "Noche Pulso", "artistas": [3], "lugar_id": 4, "fecha": "2026-08-15", "genero": "electrónica", "precio": 25000, "cupo": 200, "estado": "activo"},
+    {"evento_id": 4, "nombre": "Rock del Lago", "artistas": [1, 6], "lugar_id": 3, "fecha": "2026-11-14", "genero": "rock", "precio": 38000, "cupo": 300, "estado": "activo"},
+    {"evento_id": 5, "nombre": "Viento Norte en sala", "artistas": [5], "lugar_id": 2, "fecha": "2026-10-24", "genero": "folk", "precio": 20000, "cupo": 150, "estado": "activo"},
+    {"evento_id": 6, "nombre": "Fiesta Satelital", "artistas": [4], "lugar_id": 1, "fecha": "2026-12-05", "genero": "cumbia", "precio": 30000, "cupo": 500, "estado": "activo"},
+    {"evento_id": 7, "nombre": "Radio Neón Tour", "artistas": [6], "lugar_id": 4, "fecha": "2026-10-10", "genero": "rock", "precio": 22000, "cupo": 200, "estado": "activo"},
+    {"evento_id": 8, "nombre": "Pulso Estadio", "artistas": [3], "lugar_id": 1, "fecha": "2026-12-19", "genero": "electrónica", "precio": 42000, "cupo": 400, "estado": "activo"}
+]
+
+compras = [
+    {"compra_id": 1, "usuario_id": 2, "evento_id": 1, "cantidad": 2, "precio_unitario": 45000, "total": 90000, "fecha_compra": "2026-04-02", "estado": "confirmada"},
+    {"compra_id": 2, "usuario_id": 5, "evento_id": 1, "cantidad": 1, "precio_unitario": 45000, "total": 45000, "fecha_compra": "2026-04-10", "estado": "confirmada"},
+    {"compra_id": 3, "usuario_id": 3, "evento_id": 1, "cantidad": 2, "precio_unitario": 45000, "total": 90000, "fecha_compra": "2026-04-15", "estado": "cancelada"},
+    {"compra_id": 4, "usuario_id": 1, "evento_id": 2, "cantidad": 2, "precio_unitario": 18000, "total": 36000, "fecha_compra": "2026-06-01", "estado": "confirmada"},
+    {"compra_id": 5, "usuario_id": 3, "evento_id": 2, "cantidad": 1, "precio_unitario": 18000, "total": 18000, "fecha_compra": "2026-06-05", "estado": "confirmada"},
+    {"compra_id": 6, "usuario_id": 4, "evento_id": 3, "cantidad": 3, "precio_unitario": 25000, "total": 75000, "fecha_compra": "2026-07-20", "estado": "confirmada"},
+    {"compra_id": 7, "usuario_id": 2, "evento_id": 3, "cantidad": 1, "precio_unitario": 25000, "total": 25000, "fecha_compra": "2026-08-01", "estado": "confirmada"},
+    {"compra_id": 8, "usuario_id": 1, "evento_id": 4, "cantidad": 2, "precio_unitario": 38000, "total": 76000, "fecha_compra": "2026-09-10", "estado": "confirmada"},
+    {"compra_id": 9, "usuario_id": 5, "evento_id": 6, "cantidad": 4, "precio_unitario": 30000, "total": 120000, "fecha_compra": "2026-09-12", "estado": "confirmada"},
+    {"compra_id": 10, "usuario_id": 6, "evento_id": 7, "cantidad": 1, "precio_unitario": 22000, "total": 22000, "fecha_compra": "2026-09-15", "estado": "confirmada"},
+    {"compra_id": 11, "usuario_id": 2, "evento_id": 8, "cantidad": 2, "precio_unitario": 42000, "total": 84000, "fecha_compra": "2026-09-18", "estado": "cancelada"},
+    {"compra_id": 12, "usuario_id": 4, "evento_id": 5, "cantidad": 2, "precio_unitario": 20000, "total": 40000, "fecha_compra": "2026-09-20", "estado": "confirmada"}
+]

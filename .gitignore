@@ -20,7 +20,3 @@ env/
 .idea/
 Thumbs.db
 .DS_Store
-
-
-# Ignorar dataset de la cátedra:
-data/*.txt
