@@ -3,11 +3,9 @@
 Implementa la reserva temporal en Redis, la confirmación de compras en MongoDB y Neo4j,
 la cancelación con restitución de cupos y las demostraciones de los tres casos requeridos.
 """
-
 import json
 from datetime import datetime
 from typing import Any, Optional, Union
-
 import redis
 from neo4j import Driver
 from pymongo.database import Database

@@ -1,19 +1,19 @@
 """Pruebas mínimas de conexión a Neo4j, MongoDB y Redis desde Python dentro del contenedor."""
 
-try:
-    from config import (
-        get_mongo_client,
-        get_neo4j_driver,
-        get_redis_client,
-        wait_for_services,
-    )
-except ImportError:
-    from src.config import (
-        get_mongo_client,
-        get_neo4j_driver,
-        get_redis_client,
-        wait_for_services,
-    )
+import sys
+from pathlib import Path
+
+# Asegurar que el directorio src esté en sys.path:
+_src_dir = Path(__file__).resolve().parent.parent / "src"
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
+
+from config import (
+    get_mongo_client,
+    get_neo4j_driver,
+    get_redis_client,
+    wait_for_services,
+)
 
 # Esperar a que los servicios estén listos
 wait_for_services(5)
