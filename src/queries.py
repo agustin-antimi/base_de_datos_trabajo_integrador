@@ -181,3 +181,47 @@ def execute_query(
         return execute_redis_command(client, target, *args, **command_kwargs)
 
     raise TypeError(f"Tipo de cliente NoSQL no soportado: {type(client)}")
+
+
+from typing import Any, Optional
+from neo4j import Driver
+from config import REFERENCE_DATE
+from queries import execute_neo4j_query
+
+
+def get_users_attending_artist_events(
+    driver: Driver,
+    artist_name: str,
+    only_past: bool = True,
+    reference_date: str = REFERENCE_DATE,
+) -> list[dict[str, Any]]:
+    """Consulta en Neo4j los usuarios con compras confirmadas para eventos de un artista.
+
+    Args:
+        driver: Driver de conexión a Neo4j.
+        artist_name: Nombre del artista a buscar (resuelto dinámicamente).
+        only_past: Si es True, filtra únicamente eventos pasados respecto a la fecha de referencia.
+        reference_date: Fecha de corte en formato ISO (YYYY-MM-DD).
+
+    Returns:
+        Lista de diccionarios con el id, nombre de usuario, evento y fecha.
+    """
+    date_filter = "AND e.fecha < $ref_date" if only_past else ""
+    query = f"""
+    MATCH (u:Usuario)-[c:COMPRO]->(e:Evento)<-[:PARTICIPA_EN]-(a:Artista)
+    WHERE a.nombre = $artist_name
+      AND c.estado = 'confirmada'
+      {date_filter}
+    RETURN DISTINCT 
+        u.id AS usuario_id,
+        u.nombre AS usuario_nombre,
+        e.nombre AS evento_nombre,
+        e.fecha AS evento_fecha,
+        c.cantidad AS entradas_compradas
+    ORDER BY u.id ASC
+    """
+    parameters = {
+        "artist_name": artist_name,
+        "ref_date": reference_date,
+    }
+    return execute_neo4j_query(driver, query=query, parameters=parameters)
