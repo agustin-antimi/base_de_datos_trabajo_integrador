@@ -48,9 +48,21 @@ def build_artist_followers_stats(
     formatted_items: list[dict[str, Any]] = []
 
     for item in raw_records:
-        artist_id = item.get("artist_id") or item.get("id") or item.get("artista_id")
-        artist_name = str(item.get("artist_name") or item.get("nombre") or f"Artista {artist_id}")
-        count = int(item.get("followers_count") or item.get("seguidores") or item.get("count") or 0)
+        artist_id = item.get("artista_id") or item.get("id") or item.get("artist_id")
+        artist_name = str(
+            item.get("artista_nombre")
+            or item.get("nombre")
+            or item.get("artista")
+            or item.get("artist_name")
+            or f"Artista {artist_id}"
+        )
+        count = int(
+            item.get("seguidores")
+            or item.get("cantidad_seguidores")
+            or item.get("followers_count")
+            or item.get("count")
+            or 0
+        )
         total_followers += count
         formatted_items.append({
             "artist_id": artist_id,
@@ -86,9 +98,21 @@ def build_event_revenue_stats(
     formatted_items: list[dict[str, Any]] = []
 
     for item in raw_records:
-        event_id = item.get("event_id") or item.get("evento_id") or item.get("id")
-        event_name = str(item.get("event_name") or item.get("nombre") or f"Evento {event_id}")
-        revenue = int(item.get("total_revenue") or item.get("recaudacion") or item.get("total") or 0)
+        event_id = item.get("evento_id") or item.get("id") or item.get("event_id")
+        event_name = str(
+            item.get("evento_nombre")
+            or item.get("nombre")
+            or item.get("evento")
+            or item.get("event_name")
+            or f"Evento {event_id}"
+        )
+        revenue = int(
+            item.get("total_recaudado")
+            or item.get("recaudacion")
+            or item.get("total")
+            or item.get("total_revenue")
+            or 0
+        )
         total_revenue_all += revenue
         formatted_items.append({
             "event_id": event_id,
@@ -123,9 +147,21 @@ def build_venue_tickets_stats(
     formatted_items: list[dict[str, Any]] = []
 
     for item in raw_records:
-        venue_id = item.get("venue_id") or item.get("lugar_id") or item.get("id")
-        venue_name = str(item.get("venue_name") or item.get("nombre") or f"Lugar {venue_id}")
-        tickets = int(item.get("tickets_sold") or item.get("entradas_vendidas") or item.get("cantidad") or 0)
+        venue_id = item.get("lugar_id") or item.get("id") or item.get("venue_id")
+        venue_name = str(
+            item.get("lugar_nombre")
+            or item.get("nombre")
+            or item.get("lugar")
+            or item.get("recinto")
+            or item.get("venue_name")
+            or f"Lugar {venue_id}"
+        )
+        tickets = int(
+            item.get("entradas_vendidas")
+            or item.get("cantidad")
+            or item.get("tickets_sold")
+            or 0
+        )
         total_tickets += tickets
         formatted_items.append({
             "venue_id": venue_id,
@@ -159,7 +195,7 @@ def build_genre_searches_stats(
     formatted_items: list[dict[str, Any]] = []
 
     if raw_records and isinstance(raw_records[0], tuple):
-        for tuple_itemb in raw_records:
+        for tuple_item in raw_records:
             genre_name = str(tuple_item[0]).capitalize()
             count = int(tuple_item[1])
             total_searches += count
@@ -169,8 +205,19 @@ def build_genre_searches_stats(
             })
     else:
         for dict_item in raw_records:  # type: ignore[union-attr]
-            genre_name = str(dict_item.get("genre") or dict_item.get("genero") or "Otro").capitalize()
-            count = int(dict_item.get("search_count") or dict_item.get("cantidad") or dict_item.get("score") or 0)
+            genre_name = str(
+                dict_item.get("genero")
+                or dict_item.get("genre")
+                or "Otro"
+            ).capitalize()
+            count = int(
+                dict_item.get("cantidad_busquedas")
+                or dict_item.get("busquedas")
+                or dict_item.get("cantidad")
+                or dict_item.get("score")
+                or dict_item.get("search_count")
+                or 0
+            )
             total_searches += count
             formatted_items.append({
                 "genre": genre_name,
