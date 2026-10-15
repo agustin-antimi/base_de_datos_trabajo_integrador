@@ -67,7 +67,7 @@ def resolve_event(
         Tupla con (evento_id, nombre, precio_actual, estado).
 
     Raises:
-        ValueError: Si el evento no existe en la base de datos.
+        ValueError: Si el evento no existe en la base de datos o carece de precio válido.
     """
     if isinstance(event, int):
         doc = db_mongo.eventos.find_one({"evento_id": event})
@@ -77,11 +77,18 @@ def resolve_event(
     if not doc:
         raise ValueError(f"Evento no encontrado en el sistema: '{event}'.")
 
+    raw_price = doc.get("precio")
+    if raw_price is None or int(raw_price) <= 0:
+        raise ValueError(
+            f"El evento '{doc.get('nombre', event)}' (ID {doc.get('evento_id')}) "
+            f"no posee un precio válido configurado: {raw_price}."
+        )
+
     return (
         int(doc["evento_id"]),
         str(doc["nombre"]),
-        int(doc.get("precio", 0)),
-        str(doc.get("estado", "activo")),
+        int(raw_price),
+        str(doc.get("estado") or "cancelado"),
     )
 
 
@@ -167,7 +174,7 @@ def reserve_tickets(
         Diccionario con la información detallada de la reserva creada.
 
     Raises:
-        ValueError: Si la cantidad de entradas no es positiva o el evento está inactivo.
+        ValueError: Si la cantidad de entradas o el precio no son positivos, o el evento está inactivo.
         PermissionError: Si el usuario no tiene una sesión activa en Redis.
         RuntimeError: Si no hay disponibilidad suficiente de entradas para el evento.
     """
@@ -179,6 +186,11 @@ def reserve_tickets(
 
     if event_status.lower() != "activo":
         raise ValueError(f"No se pueden reservar entradas: el evento '{event_name}' está '{event_status}'.")
+
+    if price <= 0:
+        raise ValueError(
+            f"No se pueden reservar entradas: el evento '{event_name}' no posee un precio válido (${price})."
+        )
 
     # Validar sesión activa en Redis
     if not is_user_session_active(user_id, redis_client):
@@ -270,7 +282,8 @@ def confirm_reservation(
         Diccionario con la información de la compra confirmada.
 
     Raises:
-        RuntimeError: Si la reserva no existe o ya venció por TTL.
+        RuntimeError: Si la reserva no existe o ya venció por TTL, o si el evento ya no existe.
+        ValueError: Si el evento se encuentra cancelado o inactivo, o su precio liquidado no es válido.
     """
     res_key = f"reservation:{reservation_id}"
     raw_data = redis_client.get(res_key)
@@ -286,12 +299,29 @@ def confirm_reservation(
     event_id = int(res_info["evento_id"])
     quantity = int(res_info["cantidad"])
 
-    # Obtener el precio actual vigente del evento desde MongoDB
+    # Obtener el precio actual vigente del evento desde MongoDB y revalidar su estado
     event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
     if not event_doc:
         raise RuntimeError(f"El evento ID {event_id} ya no existe en el sistema.")
 
-    current_price = int(event_doc.get("precio", res_info.get("precio_unitario", 0)))
+    event_status = str(event_doc.get("estado") or "cancelado")
+    if event_status.lower() != "activo":
+        raise ValueError(
+            f"No se puede confirmar la compra: el evento ID {event_id} "
+            f"('{event_doc.get('nombre', 'Desconocido')}') se encuentra '{event_status}'."
+        )
+
+    raw_price = event_doc.get("precio")
+    if raw_price is None or int(raw_price) <= 0:
+        raw_price = res_info.get("precio_unitario")
+
+    if raw_price is None or int(raw_price) <= 0:
+        raise ValueError(
+            f"No se puede confirmar la compra: el evento ID {event_id} "
+            f"('{event_doc.get('nombre', 'Desconocido')}') no posee un precio válido configurado ({raw_price})."
+        )
+
+    current_price = int(raw_price)
     total_amount = current_price * quantity
     date_str = purchase_date if purchase_date is not None else datetime.now().strftime("%Y-%m-%d")
 
