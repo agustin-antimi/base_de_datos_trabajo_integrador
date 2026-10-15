@@ -9,9 +9,9 @@
 
 ## 1. Introducción y Propósito del Documento
 
-Este documento proporciona una visión integral y exhaustiva de la arquitectura del software, la distribución de responsabilidades entre módulos del paquete [`src/`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src), los contratos de persistencia políglota y su correspondencia directa con los requerimientos establecidos en [`CONSIGNAS.md`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/CONSIGNAS.md).
+Este documento proporciona una visión integral y exhaustiva de la arquitectura del software, la distribución de responsabilidades entre módulos del paquete [`src/`](src/), los contratos de persistencia políglota y su correspondencia directa con los requerimientos establecidos en [`CONSIGNAS.md`](CONSIGNAS.md).
 
-El objetivo principal es servir como guía canónica de referencia para desarrolladores, agentes y evaluadores, detallando cómo interactúa cada módulo con los tres motores NoSQL (**MongoDB**, **Neo4j**, **Redis**) para cumplir con las reglas de negocio, los estándares de codificación de [`AGENTS.md`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/AGENTS.md) y los requerimientos de entrega.
+El objetivo principal es servir como guía canónica de referencia para desarrolladores, agentes y evaluadores, detallando cómo interactúa cada módulo con los tres motores NoSQL (**MongoDB**, **Neo4j**, **Redis**) para cumplir con las reglas de negocio, los estándares de codificación de [`AGENTS.md`](AGENTS.md) y los requerimientos de entrega.
 
 ---
 
@@ -69,7 +69,7 @@ src/
 
 ---
 
-### 3.1 [`config.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/config.py) — Configuración Centralizada y Conectores
+### 3.1 [`config.py`](src/config.py) — Configuración Centralizada y Conectores
 
 * **Propósito:** Centralizar todos los parámetros del sistema, credenciales, tiempos de vencimiento, constantes de negocio y utilidades de conexión reutilizables, garantizando la política de **Cero Hardcoding**.
 * **Detección Automática de Entorno:**
@@ -89,7 +89,7 @@ src/
 
 ---
 
-### 3.2 [`functions.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/functions.py) — Pipeline ETL, Ingesta y Sincronización
+### 3.2 [`functions.py`](src/functions.py) — Pipeline ETL, Ingesta y Sincronización
 
 * **Propósito:** Orquestar el ciclo de vida inicial de los datos: limpieza idempotente, ingestión políglota distribuida, creación de índices/restricciones, sanitización de MongoDB y cálculo de disponibilidad en tiempo real.
 * **Pipeline de Ingesta (`process_dataset`):**
@@ -114,7 +114,7 @@ src/
 
 ---
 
-### 3.3 [`purchase.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/purchase.py) — Flujo Transaccional de Compra y Control de Reservas
+### 3.3 [`purchase.py`](src/purchase.py) — Flujo Transaccional de Compra y Control de Reservas
 
 * **Propósito:** Implementar el flujo operativo de reserva, confirmación y cancelación de entradas de recitales, garantizando consistencia multibase, concurrencia segura y cumplimiento de las tres reglas de compra.
 * **Mecanismos y Funciones Principales:**
@@ -143,7 +143,7 @@ src/
 
 ---
 
-### 3.4 [`queries.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/queries.py) — Capa de Consultas Políglotas (Sección 3)
+### 3.4 [`queries.py`](src/queries.py) — Capa de Consultas Políglotas (Sección 3)
 
 * **Propósito:** Encapsular la ejecución de las 12 consultas del enunciado y exponer helpers genéricos para interactuar con los tres motores NoSQL.
 * **Capa Genérica:**
@@ -173,7 +173,7 @@ src/
 
 ---
 
-### 3.5 [`analytics.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/analytics.py) — Estadísticas y Visualización Gráfica (Sección 4)
+### 3.5 [`analytics.py`](src/analytics.py) — Estadísticas y Visualización Gráfica (Sección 4)
 
 * **Propósito:** Implementar una **arquitectura desacoplada en dos capas** para generar las 4 estadísticas requeridas por las consignas y representarlas con gráficos profesionales en Matplotlib.
 * **Capa 1: Procesamiento Estadístico Puro (`build_*_stats`)**
@@ -191,7 +191,7 @@ src/
 
 ---
 
-### 3.6 [`modifications.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/modifications.py) — Mutaciones Multibase y Consistencia (Sección 5)
+### 3.6 [`modifications.py`](src/modifications.py) — Mutaciones Multibase y Consistencia (Sección 5)
 
 * **Propósito:** Ejecutar las modificaciones de datos solicitadas en la Sección 5 asegurando la sincronización en todas las bases afectadas y generando consultas de evidencia antes y después de cada cambio.
 * **Operaciones Implementadas:**
@@ -284,11 +284,11 @@ graph TD
 
 ## 6. Brechas Técnicas Detectadas y Pasos de Sincronización
 
-1. **Consultas de Apoyo Faltantes en [`src/queries.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/queries.py):**
-   * El módulo [`src/analytics.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/analytics.py) cuenta con procesadores y gráficos para *Seguidores por Artista* y *Entradas por Recinto*, pero en `queries.py` aún no existen las funciones específicas de consulta (`get_artist_followers_count` y `get_tickets_sold_per_venue`).
-2. **Creación Automática de Carpetas en [`src/analytics.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/analytics.py):**
+1. **Consultas de Apoyo Faltantes en [`src/queries.py`](src/queries.py):**
+   * El módulo [`src/analytics.py`](src/analytics.py) cuenta con procesadores y gráficos para *Seguidores por Artista* y *Entradas por Recinto*, pero en `queries.py` aún no existen las funciones específicas de consulta (`get_artist_followers_count` y `get_tickets_sold_per_venue`).
+2. **Creación Automática de Carpetas en [`src/analytics.py`](src/analytics.py):**
    * Si se pasa un `save_path` hacia un subdirectorio inexistente, `fig.savefig` arroja `FileNotFoundError`. Se requiere incorporar `Path(save_path).parent.mkdir(parents=True, exist_ok=True)`.
-3. **Celdas de Ejecución en [`notebooks/TP_Integrador.ipynb`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/notebooks/TP_Integrador.ipynb):**
+3. **Celdas de Ejecución en [`notebooks/TP_Integrador.ipynb`](notebooks/TP_Integrador.ipynb):**
    * El notebook actualmente se detiene en la celda de la Consulta 12 (línea 1730). Debe extenderse para incorporar las celdas ejecutables de la **Sección 4** (tablas estadísticas y gráficos Matplotlib) y de la **Sección 5** (las 5 modificaciones con sus respectivas evidencias antes y después).
 4. **Redacción del Informe Conceptual (Sección 6):**
    * Responder dentro del notebook o en un documento anexo las preguntas sobre vencimiento de reservas, datos compartidos/desincronización y consistencia al eliminar entidades.

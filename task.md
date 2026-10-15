@@ -3,7 +3,7 @@
 > **Materia:** Base de Datos — Licenciatura en Ciencia de Datos en Organizaciones  
 > **Institución:** Facultad de Informática / Ciencias Económicas — Universidad Nacional de La Plata (UNLP 2026)  
 > **Proyecto:** Sistema de Venta de Entradas y Recomendación de Eventos (Persistencia Políglota)  
-> **Referencia Principal:** [`CONSIGNAS.md`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/CONSIGNAS.md) · **Directrices:** [`AGENTS.md`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/AGENTS.md) · **Arquitectura:** [`module_overview.md`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/module_overview.md)  
+> **Referencia Principal:** [CONSIGNAS.md](CONSIGNAS.md) · **Directrices:** [AGENTS.md](AGENTS.md) · **Arquitectura:** [module_overview.md](module_overview.md)  
 > **Última actualización:** 15 de Octubre de 2026  
 
 ---
@@ -12,14 +12,14 @@
 
 | Sección / Requerimiento Oficial | Módulo Principal en `src/` | Estado en Código | Estado en Notebook | Descripción y Cumplimiento |
 | :--- | :--- | :---: | :---: | :--- |
-| **Requisitos Técnicos: Limpieza** | [`src/functions.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/functions.py) | `[x] Completo` | `[x] Integrado` | Limpieza idempotente (`clean_db`) de MongoDB, Neo4j y Redis. |
-| **Requisitos Técnicos: Índices** | [`src/functions.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/functions.py) | `[x] Completo` | `[x] Integrado` | Índices únicos en MongoDB y restricciones `IS UNIQUE` en Neo4j. |
-| **Requisitos Técnicos: Cero Duplicación** | [`src/functions.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/functions.py) | `[x] Completo` | `[x] Integrado` | Desasociación de listas relacionales en MongoDB (`$unset`). |
-| **1. Carga Inicial y Distribución** | [`src/functions.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/functions.py) | `[x] Completo` | `[x] Integrado` | Pipeline ETL completo: Mongo $\rightarrow$ Neo4j $\rightarrow$ Sanitización $\rightarrow$ Redis. |
-| **2. Flujo de Compra y Transacciones** | [`src/purchase.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/purchase.py) | `[x] Completo` | `[x] Integrado` | Sesiones (30m), reservas (10m), confirmación atómica y 3 casos de prueba. |
-| **3. Consultas Políglotas (12)** | [`src/queries.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/queries.py) | `[x] Completo` | `[x] Integrado` | 12 consultas con nombres, filtros temporales y ordenamientos correctos. |
-| **4. Estadísticas y Gráficos** | [`src/analytics.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/analytics.py) | `[!] Ajuste menor` | `[ ] Pendiente` | Lógica estadística y Matplotlib desacoplada; faltan 2 queries auxiliares y celdas en notebook. |
-| **5. Modificaciones Multibase** | [`src/modifications.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
+| **Requisitos Técnicos: Limpieza** | [`src/functions.py`](src/functions.py) | `[x] Completo` | `[x] Integrado` | Limpieza idempotente (`clean_db`) de MongoDB, Neo4j y Redis. |
+| **Requisitos Técnicos: Índices** | [`src/functions.py`](src/functions.py) | `[x] Completo` | `[x] Integrado` | Índices únicos en MongoDB y restricciones `IS UNIQUE` en Neo4j. |
+| **Requisitos Técnicos: Cero Duplicación** | [`src/functions.py`](src/functions.py) | `[x] Completo` | `[x] Integrado` | Desasociación de listas relacionales en MongoDB (`$unset`). |
+| **1. Carga Inicial y Distribución** | [`src/functions.py`](src/functions.py) | `[x] Completo` | `[x] Integrado` | Pipeline ETL completo: Mongo $\rightarrow$ Neo4j $\rightarrow$ Sanitización $\rightarrow$ Redis. |
+| **2. Flujo de Compra y Transacciones** | [`src/purchase.py`](src/purchase.py) | `[x] Completo` | `[x] Integrado` | Sesiones (30m), reservas (10m), confirmación atómica y 3 casos de prueba. |
+| **3. Consultas Políglotas (12)** | [`src/queries.py`](src/queries.py) | `[x] Completo` | `[x] Integrado` | 12 consultas con nombres, filtros temporales y ordenamientos correctos. |
+| **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[!] Ajuste menor` | `[ ] Pendiente` | Lógica estadística y Matplotlib desacoplada; faltan 2 queries auxiliares y celdas en notebook. |
+| **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
 | **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
 
@@ -42,10 +42,10 @@ graph LR
 ### 🔹 Fase 1: Finalización de Módulos de Soporte y Correcciones (`src/`)
 **Objetivo:** Dejar el 100% de los módulos de `src/` completamente probados, documentados y sin errores de dependencia antes de volcarlos al notebook.
 
-- [ ] **Tarea 1.1:** Implementar en [`src/queries.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/queries.py) la consulta Cypher `get_artist_followers_count(driver)` para consultar en Neo4j la cantidad de usuarios que siguen a cada artista (`(:Usuario)-[:SIGUE]->(:Artista)`), ordenados de mayor a menor.
-- [ ] **Tarea 1.2:** Implementar en [`src/queries.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/queries.py) la consulta `get_tickets_sold_per_venue(driver, db_mongo)` para calcular las entradas vendidas acumuladas por lugar o recinto, cruzando compras con lugares.
-- [ ] **Tarea 1.3:** Agregar en [`src/analytics.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/analytics.py) la creación automática de subdirectorios padre (`Path(save_path).parent.mkdir(parents=True, exist_ok=True)`) en todos los métodos de guardado (`plot_*`) para prevenir `FileNotFoundError`.
-- [ ] **Tarea 1.4:** Revisar y certificar docstrings en estilo Google y anotaciones de tipo estrictas en [`src/analytics.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/analytics.py) y [`src/queries.py`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/src/queries.py).
+- [ ] **Tarea 1.1:** Implementar en [`src/queries.py`](src/queries.py) la consulta Cypher `get_artist_followers_count(driver)` para consultar en Neo4j la cantidad de usuarios que siguen a cada artista (`(:Usuario)-[:SIGUE]->(:Artista)`), ordenados de mayor a menor.
+- [ ] **Tarea 1.2:** Implementar en [`src/queries.py`](src/queries.py) la consulta `get_tickets_sold_per_venue(driver, db_mongo)` para calcular las entradas vendidas acumuladas por lugar o recinto, cruzando compras con lugares.
+- [ ] **Tarea 1.3:** Agregar en [`src/analytics.py`](src/analytics.py) la creación automática de subdirectorios padre (`Path(save_path).parent.mkdir(parents=True, exist_ok=True)`) en todos los métodos de guardado (`plot_*`) para prevenir `FileNotFoundError`.
+- [ ] **Tarea 1.4:** Revisar y certificar docstrings en estilo Google y anotaciones de tipo estrictas en [`src/analytics.py`](src/analytics.py) y [`src/queries.py`](src/queries.py).
 
 ---
 
@@ -106,7 +106,7 @@ graph LR
 
 - [ ] **Tarea 5.1:** Reiniciar el kernel y ejecutar todas las celdas de principio a fin (*Restart Kernel and Run All Cells*) en un entorno Docker limpio.
 - [ ] **Tarea 5.2:** Verificar que no se produzcan excepciones no controladas ni advertencias de deprecación.
-- [ ] **Tarea 5.3:** Validar que [`requirements.txt`](file:///c:/Users/antim/OneDrive/Escritorio/facultad/2d0/2do%20cuatri/base%20de%20datos/trabajo/base_de_datos_trabajo_integrador/requirements.txt) refleje exactamente las versiones compatibles del contenedor.
+- [ ] **Tarea 5.3:** Validar que [`requirements.txt`](requirements.txt) refleje exactamente las versiones compatibles del contenedor.
 - [ ] **Tarea 5.4:** Empaquetar el archivo `.zip` de entrega con el notebook ejecutado, el informe y el archivo de requerimientos.
 
 ---
