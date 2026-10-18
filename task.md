@@ -42,7 +42,7 @@ graph LR
 ### 🔹 Fase 1: Finalización de Módulos de Soporte y Correcciones (`src/`)
 **Objetivo:** Dejar el 100% de los módulos de `src/` completamente probados, documentados y sin errores de dependencia antes de volcarlos al notebook.
 
-- [ ] **Tarea 1.1:** Implementar en [`src/queries.py`](src/queries.py) la consulta Cypher `get_artist_followers_count(driver)` para consultar en Neo4j la cantidad de usuarios que siguen a cada artista (`(:Usuario)-[:SIGUE]->(:Artista)`), ordenados de mayor a menor.
+- [x] **Tarea 1.1:** Implementar en [`src/queries.py`](src/queries.py) la consulta Cypher `get_artist_followers_count(driver)` para consultar en Neo4j la cantidad de usuarios que siguen a cada artista (`(:Usuario)-[:SIGUE]->(:Artista)`), ordenados de mayor a menor.
 - [ ] **Tarea 1.2:** Implementar en [`src/queries.py`](src/queries.py) la consulta `get_tickets_sold_per_venue(driver, db_mongo)` para calcular las entradas vendidas acumuladas por lugar o recinto, cruzando compras con lugares.
 - [ ] **Tarea 1.3:** Agregar en [`src/analytics.py`](src/analytics.py) la creación automática de subdirectorios padre (`Path(save_path).parent.mkdir(parents=True, exist_ok=True)`) en todos los métodos de guardado (`plot_*`) para prevenir `FileNotFoundError`.
 - [ ] **Tarea 1.4:** Revisar y certificar docstrings en estilo Google y anotaciones de tipo estrictas en [`src/analytics.py`](src/analytics.py) y [`src/queries.py`](src/queries.py).

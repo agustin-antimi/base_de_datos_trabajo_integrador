@@ -754,6 +754,42 @@ def get_top_searched_genres(
     return top_genres
 
 
+# ==============================================================================
+# Consultas de Apoyo Estadístico (Sección 4: Estadísticas y Gráficos)
+# ==============================================================================
 
 
+def get_artist_followers_count(
+    driver: Driver,
+    limit: Optional[int] = None,
+) -> list[dict[str, Any]]:
+    """Obtiene la cantidad de usuarios que siguen a cada artista desde Neo4j.
 
+    Recorre los nodos Artista y contabiliza las relaciones entrantes
+    (:Usuario)-[:SIGUE]->(:Artista), utilizando OPTIONAL MATCH para incluir
+    a todos los artistas del catálogo (incluso si no poseen seguidores registrados,
+    asignándoles 0).
+
+    Args:
+        driver: Driver de conexión a la base de datos de grafos Neo4j.
+        limit: Cantidad máxima opcional de artistas a retornar.
+
+    Returns:
+        Lista de diccionarios con 'artista_id', 'artista_nombre' y 'seguidores',
+        ordenados descendentemente por cantidad de seguidores y alfabéticamente por nombre.
+    """
+    query = """
+    MATCH (a:Artista)
+    OPTIONAL MATCH (u:Usuario)-[:SIGUE]->(a)
+    RETURN 
+        a.id AS artista_id,
+        a.nombre AS artista_nombre,
+        count(u) AS seguidores
+    ORDER BY seguidores DESC, artista_nombre ASC
+    """
+    params: dict[str, Any] = {}
+    if limit is not None and limit > 0:
+        query += "\n    LIMIT $limit"
+        params["limit"] = limit
+
+    return execute_neo4j_query(driver, query=query, parameters=params)
