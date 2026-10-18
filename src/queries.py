@@ -793,3 +793,41 @@ def get_artist_followers_count(
         params["limit"] = limit
 
     return execute_neo4j_query(driver, query=query, parameters=params)
+
+
+def get_tickets_sold_per_venue(
+    driver: Driver,
+    db_mongo: Optional[Database] = None,
+    limit: Optional[int] = None,
+) -> list[dict[str, Any]]:
+    """Obtiene la cantidad acumulada de entradas vendidas por cada lugar o recinto desde Neo4j.
+
+    Recorre los nodos Lugar y contabiliza las compras confirmadas asociadas a sus eventos
+    mediante el patrón (:Lugar)<-[:SE_REALIZA_EN]-(:Evento)<-[:COMPRO]-(:Usuario).
+    Utiliza OPTIONAL MATCH para incluir todos los recintos del catálogo, asignando 0
+    a aquellos que no registren ventas.
+
+    Args:
+        driver: Driver de conexión a la base de datos de grafos Neo4j.
+        db_mongo: Instancia de base de datos de MongoDB opcional (para compatibilidad de firma políglota).
+        limit: Cantidad máxima opcional de recintos a retornar.
+
+    Returns:
+        Lista de diccionarios con 'lugar_id', 'lugar_nombre' y 'entradas_vendidas',
+        ordenados descendentemente por cantidad vendida y alfabéticamente por nombre.
+    """
+    query = """
+    MATCH (l:Lugar)
+    OPTIONAL MATCH (l)<-[:SE_REALIZA_EN]-(ev:Evento)<-[c:COMPRO {estado: 'confirmada'}]-(:Usuario)
+    RETURN 
+        l.id AS lugar_id,
+        l.nombre AS lugar_nombre,
+        coalesce(sum(c.cantidad), 0) AS entradas_vendidas
+    ORDER BY entradas_vendidas DESC, lugar_nombre ASC
+    """
+    params: dict[str, Any] = {}
+    if limit is not None and limit > 0:
+        query += "\n    LIMIT $limit"
+        params["limit"] = limit
+
+    return execute_neo4j_query(driver, query=query, parameters=params)
