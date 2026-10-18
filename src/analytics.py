@@ -7,7 +7,6 @@ Este módulo implementa una arquitectura desacoplada en dos capas:
    procesadas y generan figuras de Matplotlib sin interactuar con las bases de datos.
 """
 
-from pathlib import Path
 from typing import Any, Optional, Union
 import matplotlib.pyplot as plt
 
@@ -242,7 +241,6 @@ def plot_artist_followers(
     ax: Optional[plt.Axes] = None,
     color: str = CHART_THEME["primary"],
     show_labels: bool = True,
-    save_path: Optional[Union[str, Path]] = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Genera un gráfico de barras con la cantidad de seguidores por artista.
 
@@ -251,7 +249,6 @@ def plot_artist_followers(
         ax: Objeto Axes de Matplotlib opcional. Si es None, crea una nueva figura.
         color: Código de color hexadecimal para las barras.
         show_labels: Si es True, renderiza la cifra exacta sobre cada barra.
-        save_path: Ruta de archivo opcional para guardar el gráfico.
 
     Returns:
         Tupla (Figure, Axes) de Matplotlib.
@@ -294,8 +291,6 @@ def plot_artist_followers(
 
     if created_fig:
         fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
     return fig, ax
 
@@ -305,7 +300,6 @@ def plot_event_revenue(
     ax: Optional[plt.Axes] = None,
     color: str = CHART_THEME["secondary"],
     show_labels: bool = True,
-    save_path: Optional[Union[str, Path]] = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Genera un gráfico de barras horizontales con la recaudación por evento en compras confirmadas.
 
@@ -314,7 +308,6 @@ def plot_event_revenue(
         ax: Objeto Axes de Matplotlib opcional. Si es None, crea una nueva figura.
         color: Código de color hexadecimal para las barras.
         show_labels: Si es True, renderiza el monto en formato moneda junto a cada barra.
-        save_path: Ruta de archivo opcional para guardar el gráfico.
 
     Returns:
         Tupla (Figure, Axes) de Matplotlib.
@@ -359,8 +352,6 @@ def plot_event_revenue(
 
     if created_fig:
         fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
     return fig, ax
 
@@ -370,7 +361,6 @@ def plot_tickets_by_venue(
     ax: Optional[plt.Axes] = None,
     color: str = CHART_THEME["accent"],
     show_labels: bool = True,
-    save_path: Optional[Union[str, Path]] = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Genera un gráfico de barras con la cantidad de entradas vendidas por lugar o recinto.
 
@@ -379,7 +369,6 @@ def plot_tickets_by_venue(
         ax: Objeto Axes de Matplotlib opcional. Si es None, crea una nueva figura.
         color: Código de color hexadecimal para las barras.
         show_labels: Si es True, renderiza la cantidad numérica sobre cada barra.
-        save_path: Ruta de archivo opcional para guardar el gráfico.
 
     Returns:
         Tupla (Figure, Axes) de Matplotlib.
@@ -422,8 +411,6 @@ def plot_tickets_by_venue(
 
     if created_fig:
         fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
     return fig, ax
 
@@ -433,7 +420,6 @@ def plot_genre_searches(
     ax: Optional[plt.Axes] = None,
     color: str = CHART_THEME["warning"],
     show_labels: bool = True,
-    save_path: Optional[Union[str, Path]] = None,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Genera un gráfico de barras con la cantidad de búsquedas por género musical.
 
@@ -442,7 +428,6 @@ def plot_genre_searches(
         ax: Objeto Axes de Matplotlib opcional. Si es None, crea una nueva figura.
         color: Código de color hexadecimal para las barras.
         show_labels: Si es True, renderiza la cantidad numérica sobre cada barra.
-        save_path: Ruta de archivo opcional para guardar el gráfico.
 
     Returns:
         Tupla (Figure, Axes) de Matplotlib.
@@ -484,8 +469,6 @@ def plot_genre_searches(
 
     if created_fig:
         fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
     return fig, ax
 
@@ -496,7 +479,6 @@ def plot_combined_dashboard(
     venue_stats: list[dict[str, Any]],
     genre_stats: list[dict[str, Any]],
     figsize: tuple[int, int] = (16, 12),
-    save_path: Optional[Union[str, Path]] = None,
 ) -> tuple[plt.Figure, Any]:
     """Genera un dashboard integrado de 2x2 con los cuatro gráficos estadísticos.
 
@@ -509,7 +491,6 @@ def plot_combined_dashboard(
         venue_stats: Estadísticas de entradas por lugar.
         genre_stats: Estadísticas de búsquedas por género.
         figsize: Dimensiones de la figura (ancho, alto).
-        save_path: Ruta de archivo opcional para guardar el dashboard.
 
     Returns:
         Tupla (Figure, matriz_de_Axes) de Matplotlib.
@@ -528,8 +509,5 @@ def plot_combined_dashboard(
         y=0.99,
     )
     fig.tight_layout()
-
-    if save_path:
-        fig.savefig(save_path, dpi=300, bbox_inches="tight")
 
     return fig, axes

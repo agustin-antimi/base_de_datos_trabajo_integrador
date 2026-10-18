@@ -18,7 +18,7 @@
 | **1. Carga Inicial y Distribución** | [`src/functions.py`](src/functions.py) | `[x] Completo` | `[x] Integrado` | Pipeline ETL completo: Mongo $\rightarrow$ Neo4j $\rightarrow$ Sanitización $\rightarrow$ Redis. |
 | **2. Flujo de Compra y Transacciones** | [`src/purchase.py`](src/purchase.py) | `[x] Completo` | `[x] Integrado` | Sesiones (30m), reservas (10m), confirmación atómica y 3 casos de prueba. |
 | **3. Consultas Políglotas (12)** | [`src/queries.py`](src/queries.py) | `[x] Completo` | `[x] Integrado` | 12 consultas con nombres, filtros temporales y ordenamientos correctos. |
-| **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[!] Ajuste menor` | `[ ] Pendiente` | Lógica estadística y Matplotlib desacoplada; faltan 2 queries auxiliares y celdas en notebook. |
+| **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[ ] Pendiente` | Lógica estadística y Matplotlib completas; pendiente volcado al notebook. |
 | **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
 | **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
@@ -44,7 +44,7 @@ graph LR
 
 - [x] **Tarea 1.1:** Implementar en [`src/queries.py`](src/queries.py) la consulta Cypher `get_artist_followers_count(driver)` para consultar en Neo4j la cantidad de usuarios que siguen a cada artista (`(:Usuario)-[:SIGUE]->(:Artista)`), ordenados de mayor a menor.
 - [x] **Tarea 1.2:** Implementar en [`src/queries.py`](src/queries.py) la consulta `get_tickets_sold_per_venue(driver, db_mongo)` para calcular las entradas vendidas acumuladas por lugar o recinto, cruzando compras con lugares.
-- [ ] **Tarea 1.3:** Agregar en [`src/analytics.py`](src/analytics.py) la creación automática de subdirectorios padre (`Path(save_path).parent.mkdir(parents=True, exist_ok=True)`) en todos los métodos de guardado (`plot_*`) para prevenir `FileNotFoundError`.
+- [x] **Tarea 1.3:** Adaptar [`src/analytics.py`](src/analytics.py) para visualización interactiva exclusiva en pantalla/notebook, eliminando `save_path` y la persistencia a disco innecesaria para prevenir `FileNotFoundError`.
 - [ ] **Tarea 1.4:** Revisar y certificar docstrings en estilo Google y anotaciones de tipo estrictas en [`src/analytics.py`](src/analytics.py) y [`src/queries.py`](src/queries.py).
 
 ---
@@ -148,10 +148,10 @@ Este registro audita los hallazgos técnicos, vulnerabilidades de negocio y desf
   - **Riesgo:** Al pasar la salida de `get_tickets_sold_per_event` o `get_top_searched_genres`, los gráficos generaban recaudación en `$0`, nombres genéricos y conteo de búsquedas en 0.
   - **Resolución:** Se adaptaron las 4 funciones de estadísticas para priorizar los campos en español del modelo de datos de la base.
 
-- [ ] **BUG-06: Creación automática de directorios al guardar figuras (`save_path`)**
+- [x] **BUG-06: Creación automática de directorios al guardar figuras (`save_path`)**
   - **Ubicación:** `src/analytics.py` (`plot_*`)
-  - **Riesgo:** Si el usuario especifica una ruta hacia un subdirectorio que no existe (ej. `figures/dashboard.png`), `fig.savefig` lanza `FileNotFoundError`.
-  - **Acción requerida:** Agregar `Path(save_path).parent.mkdir(parents=True, exist_ok=True)`.
+  - **Riesgo:** Si el usuario especificaba una ruta hacia un subdirectorio que no existía (ej. `figures/dashboard.png`), `fig.savefig` lanzaba `FileNotFoundError`.
+  - **Resolución:** Se eliminó el parámetro `save_path` y la lógica de guardado en disco en favor de renderizado puro en notebook con Matplotlib, descartando el riesgo de `FileNotFoundError`.
 
 - [x] **BUG-07: Faltan 2 consultas en `src/queries.py` para alimentar los gráficos 1 y 3**
   - **Ubicación:** `src/queries.py`
