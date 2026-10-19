@@ -64,8 +64,7 @@ src/
 ├── purchase.py           # Flujo transaccional de compra, reservas temporales y sesiones
 ├── queries.py            # Consultas políglotas (12 consignas + consultas analíticas auxiliares)
 ├── analytics.py          # Procesamiento estadístico puro y visualización con Matplotlib
-├── modifications.py      # Mutaciones multibase de la Sección 5 y generación de evidencias
-└── exhibit.py            # Anexo Punto 1: Reseñas de eventos, validaciones y promedios
+└── modifications.py      # Mutaciones multibase de la Sección 5 y generación de evidencias
 ```
 
 ---
@@ -230,24 +229,6 @@ src/
 
 ---
 
-### 3.8 [`exhibit.py`](src/exhibit.py) — Reseñas de Eventos y Requerimientos del Anexo (Punto 1)
-
-* **Propósito:** Implementar la lógica de negocio, validaciones cruzadas y persistencia políglota para el Punto 1 del Anexo ("Reseñas de eventos").
-* **Estrategia de Persistencia Políglota:**
-  * **MongoDB (Colección `resenas`):** Almacenamiento documental y fuente de verdad para las reseñas con índice de unicidad compuesto sobre `(usuario_id, evento_id)` e índice único sobre `resena_id`. Almacena calificaciones (1-5), comentarios, metadatos del evento, usuarios y artistas vinculados.
-  * **Neo4j (Relación `:CALIFICO`):** Relación directa `(:Usuario)-[:CALIFICO {calificacion, comentario, fecha, resena_id}]->(:Evento)` que permite traversals y análisis de recomendaciones basadas en la red.
-* **Operaciones Principales:**
-  * `resolve_artist(db_mongo, artist)`: Resolución dinámica de artistas por ID o nombre sin hardcoding.
-  * `create_review_indexes(db_mongo, driver_neo4j, collection_name)`: Creación de índices y restricciones de unicidad.
-  * `validate_event_review(db_mongo, user, event, rating, comment, ...)`: Valida calificación (1 a 5), comentario no vacío, evento pasado (`fecha < reference_date`), compra confirmada previa (asistencia requerida) y que no exista reseña previa para ese evento por parte del usuario.
-  * `create_event_review(db_mongo, user, event, rating, comment, ...)`: Registra la reseña de forma consistente en MongoDB y Neo4j con IDs incrementales.
-  * `seed_sample_reviews(db_mongo, driver_neo4j, reviews, ...)`: Siembra de forma idempotente al menos 6 reseñas de usuarios distintos asegurando asistencia comprobada en compras históricas.
-  * `get_average_ratings_per_event(db_mongo, driver_neo4j)`: Agregación de promedios de calificación por evento ordenados descendentemente con nombres visibles.
-  * `get_average_ratings_per_artist(db_mongo, driver_neo4j)`: Agregación de promedios de calificación por artista considerando las reseñas de todos sus eventos mediante Cypher en Neo4j y pipeline en MongoDB.
-  * `demonstrate_reviews_flow(db_mongo, driver_neo4j)`: Demostración interactiva de 1 caso válido (asistente con compra confirmada) y 1 caso rechazado (intento de calificar sin poseer compra confirmada previa).
-
----
-
 ## 4. Mapa de Interdependencias entre Módulos
 
 ```mermaid
@@ -298,10 +279,6 @@ graph TD
 | **5. Modificaciones** | 5.5 Eliminación de amistades | `delete_user_friendships` | `src/modifications.py` | `[-] Pendiente volcado` |
 | **5. Modificaciones** | Consultas de evidencia para cada cambio | `get_*_evidence` | `src/modifications.py` | `[-] Pendiente volcado` |
 | **6. Informe** | Preguntas conceptuales, arquitectura y diagramas | Markdown / PDF | `notebooks/` / Documento | `[ ] Pendiente redacción` |
-| **Anexo: Punto 1** | Reseñas de eventos pasados con compra confirmada | `create_event_review`, `validate_event_review` | `src/exhibit.py` | `[x] Implementado en src/` |
-| **Anexo: Punto 1** | Demostración de caso válido y caso rechazado | `demonstrate_reviews_flow` | `src/exhibit.py` | `[x] Implementado en src/` |
-| **Anexo: Punto 1** | Carga de al menos 6 reseñas de distintos usuarios | `seed_sample_reviews` | `src/exhibit.py` | `[x] Implementado en src/` |
-| **Anexo: Punto 1** | Promedio de calificación por evento y por artista | `get_average_ratings_per_event`, `get_average_ratings_per_artist` | `src/exhibit.py` | `[x] Implementado en src/` |
 
 ---
 

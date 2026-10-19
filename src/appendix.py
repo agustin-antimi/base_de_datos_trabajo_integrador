@@ -1,4 +1,4 @@
-"""Módulo para la resolución de requerimientos del Anexo (Puntos 1 y 2).
+"""Módulo para la resolución de requerimientos del Anexo.
 
 Implementa la validación y gestión de reseñas de eventos pasados con compra confirmada,
 así como el registro temporal y visualización gráfica del historial de precios de eventos.
@@ -167,8 +167,6 @@ def create_review_indexes(
 
 # ==============================================================================
 # VALIDACIÓN DE REGLAS DE NEGOCIO PARA RESEÑAS
-# Consigna: "Un usuario puede calificar (1 a 5) y comentar un evento pasado
-# (para el cual tiene una compra confirmada) y una sola vez por evento."
 # ==============================================================================
 
 
@@ -429,7 +427,6 @@ def create_event_review(
 
 # ==============================================================================
 # CARGA DE RESEÑAS INICIALES (Al menos 6 reseñas de distintos usuarios)
-# Consigna: "Cargar al menos 6 reseñas de distintos usuarios."
 # ==============================================================================
 
 
@@ -588,8 +585,6 @@ def seed_sample_reviews(
 
 # ==============================================================================
 # PROMEDIOS DE CALIFICACIÓN POR EVENTO Y POR ARTISTA
-# Consigna: "Mostrar el promedio de calificación por evento y por artista
-# (para un artista se consideran las reseñas de todos sus eventos)."
 # ==============================================================================
 
 
@@ -748,8 +743,6 @@ def get_average_ratings_per_artist(
 
 # ==============================================================================
 # DEMOSTRACIÓN DE CASOS VÁLIDOS Y RECHAZADOS
-# Consigna: "Implementar la operación validando ambas condiciones y demostrar
-# un caso válido y uno rechazado."
 # ==============================================================================
 
 
@@ -870,12 +863,6 @@ def demonstrate_reviews_flow(
 
 # ==============================================================================
 # ANEXO: PUNTO 2 - HISTORIAL DE PRECIOS
-# Consignas:
-# 1. Cada cambio de precio de un evento debe quedar registrado con su fecha.
-#    El precio del dataset se considera vigente desde el 2026-01-01.
-# 2. Registrar al menos 3 cambios de precio sobre un mismo evento.
-# 3. Consultar el precio vigente de un evento en una fecha dada.
-# 4. Graficar la evolución del precio de ese evento.
 # ==============================================================================
 
 

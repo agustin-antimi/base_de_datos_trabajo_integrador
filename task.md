@@ -21,7 +21,7 @@
 | **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[ ] Pendiente` | Lógica estadística y Matplotlib completas; pendiente volcado al notebook. |
 | **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
-| **Anexo (Punto 1: Reseñas)** | [`src/exhibit.py`](src/exhibit.py) | `[x] Completo` | `[ ] Pendiente` | Calificación (1 a 5) y comentarios de eventos pasados con compra confirmada, al menos 6 reseñas y promedios por evento y por artista. |
+| **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
 
 ---
 
@@ -158,7 +158,7 @@ Este registro audita los hallazgos técnicos, vulnerabilidades de negocio y desf
   - **Detalle:** `analytics.py` tiene visualizadores para *Seguidores por artista* y *Entradas por lugar*, pero en `queries.py` no estaban creadas las funciones para extraer esos datos directamente desde Neo4j/MongoDB.
   - **Resolución:** Se implementaron `get_artist_followers_count(driver)` y `get_tickets_sold_per_venue(driver)` utilizando consultas Cypher parametrizadas con `OPTIONAL MATCH`.
 
-- [ ] **BUG-08: Desconexión de Secciones 4 y 5 en el Notebook `TP_Integrador.ipynb`**
+- [X] **BUG-08: Desconexión de Secciones 4 y 5 en el Notebook `TP_Integrador.ipynb`**
   - **Ubicación:** `notebooks/TP_Integrador.ipynb`
   - **Detalle:** El notebook actualmente concluye en la celda de la Consulta 12. Faltan las celdas ejecutables de la **Sección 4** (Estadísticas y gráficos con Matplotlib) y de la **Sección 5** (Modificaciones multibase con evidencia).
   - **Acción requerida:** Incorporar las celdas correspondientes consumiendo `src/analytics.py` y `src/modifications.py`.

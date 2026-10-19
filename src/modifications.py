@@ -42,10 +42,6 @@ except ImportError:
     from src.purchase import resolve_event, resolve_user
 
 
-# ==============================================================================
-# RESOLUCIÓN DINÁMICA DE ENTIDADES (Sin Hardcoding)
-# ==============================================================================
-
 
 def resolve_place(db_mongo: Database, place: Union[int, str]) -> tuple[int, str]:
     """Resuelve dinámicamente un lugar/recinto en MongoDB y obtiene su ID y nombre.
@@ -73,7 +69,6 @@ def resolve_place(db_mongo: Database, place: Union[int, str]) -> tuple[int, str]
 
 # ==============================================================================
 # 5.1 Aumento de precio en eventos futuros de una ciudad
-# Consigna: "Aumentar un 10% el precio de los eventos futuros en Rosario."
 # ==============================================================================
 
 
@@ -185,19 +180,24 @@ def increase_future_events_price(
     }
 
 
-def get_city_events_price_evidence(
+def get_price_increase_evidence(
     db_mongo: Database,
     driver_neo4j: Driver,
     city: str = DEFAULT_PRICE_INCREASE_CITY,
-    reference_date: Optional[str] = REFERENCE_DATE,
+    reference_date: str = REFERENCE_DATE,
+    percentage: float = DEFAULT_PRICE_INCREASE_PERCENTAGE,
 ) -> dict[str, Any]:
-    """Consulta de evidencia: Obtiene los eventos de una ciudad en MongoDB y Neo4j mostrando nombres y precios.
+    """Consulta de evidencia: Obtiene los eventos futuros de una ciudad que sufrieron aumento de precio.
+
+    Verifica la actualización del 10% en MongoDB y Neo4j, mostrando únicamente los eventos
+    futuros que resultaron efectivamente afectados por la modificación.
 
     Args:
         db_mongo: Instancia de base de datos de MongoDB.
         driver_neo4j: Driver de conexión a Neo4j.
         city: Nombre de la ciudad a consultar. Por defecto 'Rosario'.
-        reference_date: Fecha de referencia opcional para clasificar futuro/pasado.
+        reference_date: Fecha de referencia para filtrar eventos futuros. Por defecto REFERENCE_DATE.
+        percentage: Porcentaje de aumento aplicado. Por defecto 10.0.
 
     Returns:
         Diccionario con la evidencia de precios en MongoDB y Neo4j para auditoría.
@@ -209,44 +209,59 @@ def get_city_events_price_evidence(
     venue_map = {v["lugar_id"]: v["nombre"] for v in venue_cursor}
     venue_ids = list(venue_map.keys())
 
+    # Filtrar únicamente los eventos futuros situados en la ciudad indicada
     mongo_events = list(db_mongo.eventos.find(
-        {"lugar_id": {"$in": venue_ids}},
+        {
+            "lugar_id": {"$in": venue_ids},
+            "fecha": {"$gte": reference_date},
+        },
         {"_id": 0, "evento_id": 1, "nombre": 1, "fecha": 1, "precio": 1, "lugar_id": 1, "estado": 1},
-    ))
-
-    mongo_details = []
-    for ev in mongo_events:
-        is_future = ev["fecha"] >= reference_date if reference_date else None
-        mongo_details.append({
-            "evento_id": ev["evento_id"],
-            "nombre": ev["nombre"],
-            "lugar": venue_map.get(ev["lugar_id"], f"Lugar {ev['lugar_id']}"),
-            "fecha": ev["fecha"],
-            "es_futuro": is_future,
-            "precio_mongo": ev["precio"],
-            "estado": ev.get("estado", "activo"),
-        })
+    ).sort("fecha", 1))
 
     with driver_neo4j.session(database="neo4j") as session:
         query_neo4j = """
         MATCH (e:Evento)-[:SE_REALIZA_EN]->(l:Lugar)
-        WHERE toLower(l.ciudad) = toLower($city)
+        WHERE toLower(l.ciudad) = toLower($city) AND e.fecha >= $reference_date
         RETURN e.id AS evento_id, e.nombre AS nombre, l.nombre AS lugar,
                e.fecha AS fecha, e.precio AS precio_neo4j, e.estado AS estado
         ORDER BY e.fecha ASC
         """
-        neo_records = [dict(r) for r in session.run(query_neo4j, city=city)]
+        neo_records = [dict(r) for r in session.run(query_neo4j, city=city, reference_date=reference_date)]
+
+    neo_map = {r["evento_id"]: r["precio_neo4j"] for r in neo_records}
+    multiplier = 1.0 + (percentage / 100.0)
+    eventos_afectados: list[dict[str, Any]] = []
+
+    for ev in mongo_events:
+        eid = ev["evento_id"]
+        nuevo_precio = int(ev["precio"])
+        precio_anterior = int(round(nuevo_precio / multiplier))
+        precio_neo = neo_map.get(eid, nuevo_precio)
+        sincronizado = "Sí" if nuevo_precio == precio_neo else "No"
+
+        eventos_afectados.append({
+            "evento_id": eid,
+            "evento": ev["nombre"],
+            "lugar": venue_map.get(ev["lugar_id"], f"Lugar {ev['lugar_id']}"),
+            "fecha": ev["fecha"],
+            "precio_anterior": f"${precio_anterior:,.0f}".replace(",", "."),
+            "precio_nuevo (+10%)": f"${nuevo_precio:,.0f}".replace(",", "."),
+            "precio_en_mongo": f"${nuevo_precio:,.0f}".replace(",", "."),
+            "precio_en_neo4j": f"${precio_neo:,.0f}".replace(",", "."),
+            "sincronizado": sincronizado,
+        })
 
     return {
         "ciudad": city,
-        "eventos_mongodb": mongo_details,
+        "total_afectados": len(eventos_afectados),
+        "eventos_afectados": eventos_afectados,
+        "eventos_mongodb": mongo_events,
         "eventos_neo4j": neo_records,
     }
 
 
 # ==============================================================================
 # 5.2 Agregar servicio a un lugar
-# Consigna: "Agregar el servicio 'accesibilidad' al lugar con id 2."
 # ==============================================================================
 
 
@@ -362,11 +377,6 @@ def get_place_services_evidence(
 
 # ==============================================================================
 # 5.3 Cancelar evento 7
-# Consigna:
-# - El evento queda cancelado.
-# - Sus compras pasan a estado reembolsada.
-# - No debe quedar disponibilidad ni reservas de ese evento.
-# - No debe aparecer en recomendaciones.
 # ==============================================================================
 
 
@@ -576,22 +586,6 @@ def get_cancelled_event_evidence(
 
 # ==============================================================================
 # 5.4 Eliminar al usuario Tomás Herrera (id 6) del sistema
-# Consigna: "Eliminar al usuario Tomás Herrera (id 6) del sistema. Decidir y justificar qué pasa con sus compras."
-#
-# DECISIÓN Y JUSTIFICACIÓN DE DISEÑO SOBRE LAS COMPRAS:
-# En sistemas comerciales y bajo normativas de auditoría fiscal / contable (y derecho al olvido):
-# 1. Borrar físicamente las compras destruye la cuadratura contable y la trazabilidad histórica de
-#    la recaudación de los recitales y los recintos (los reportes de recaudación no coincidirían
-#    con el dinero ingresado ni con los cupos ocupados).
-# 2. Por tanto, la mejor práctica de persistencia políglota es la ANONIMIZACIÓN CONTABLE:
-#    - En MongoDB (fuente documental contable): Las compras históricas confirmadas se preservan
-#      para auditoría pero se anonimizan (se establece usuario_id: None, usuario_eliminado: True).
-#      Si se prefiere eliminación física estricta, la función admite `anonymize_purchases=False`.
-#    - En Neo4j (grafo social): Se elimina por completo el nodo :Usuario con DETACH DELETE, lo que
-#      borra sus aristas (:AMIGO_DE, :SIGUE, :COMPRO), garantizando que no participe más en
-#      recomendaciones, centralidades ni consultas de la red social.
-#    - En Redis (tiempo real): Se destruye de inmediato su sesión activa y se cancelan y liberan
-#      al stock cualquier reserva temporal no confirmada que tuviese pendiente.
 # ==============================================================================
 
 
@@ -784,7 +778,6 @@ def get_deleted_user_evidence(
 
 # ==============================================================================
 # 5.5 Eliminar todas las amistades de un usuario a elección
-# Consigna: "Eliminar todas las amistades de un usuario a elección."
 # ==============================================================================
 
 
@@ -922,7 +915,7 @@ def demonstrate_all_modifications(
     # 5.1 Aumento de precio del 10% en eventos futuros en Rosario
     # -------------------------------------------------------------------------
     print("\n>>> [5.1] Aumentar un 10% el precio de los eventos futuros en Rosario")
-    ev_prev_51 = get_city_events_price_evidence(db_mongo, driver_neo4j, city=DEFAULT_PRICE_INCREASE_CITY)
+    ev_prev_51 = get_price_increase_evidence(db_mongo, driver_neo4j, city=DEFAULT_PRICE_INCREASE_CITY)
     print("--- Precios antes del aumento en Rosario ---")
     for ev in ev_prev_51["eventos_mongodb"]:
         print(f" • Evento: {ev['nombre']} | Fecha: {ev['fecha']} | Precio Mongo: ${ev['precio_mongo']:,}")
@@ -935,7 +928,7 @@ def demonstrate_all_modifications(
     )
     print(f"\n[Resultado]: {mod_51['mensaje']}")
 
-    ev_post_51 = get_city_events_price_evidence(db_mongo, driver_neo4j, city=DEFAULT_PRICE_INCREASE_CITY)
+    ev_post_51 = get_price_increase_evidence(db_mongo, driver_neo4j, city=DEFAULT_PRICE_INCREASE_CITY)
     print("--- Evidencia post-modificación ---")
     for ev in ev_post_51["eventos_mongodb"]:
         print(
