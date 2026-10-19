@@ -21,7 +21,7 @@
 | **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[ ] Pendiente` | Lógica estadística y Matplotlib completas; pendiente volcado al notebook. |
 | **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
-| **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
+| **Anexo (Punto 1: Reseñas)** | [`src/exhibit.py`](src/exhibit.py) | `[x] Completo` | `[ ] Pendiente` | Calificación (1 a 5) y comentarios de eventos pasados con compra confirmada, al menos 6 reseñas y promedios por evento y por artista. |
 
 ---
 

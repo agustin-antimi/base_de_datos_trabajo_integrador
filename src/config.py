@@ -89,6 +89,50 @@ DEFAULT_DELETE_USER_ID: int = 6
 DEFAULT_REMOVE_FRIENDS_USER_NAME: str = "Juan López"
 DEFAULT_REMOVE_FRIENDS_USER_ID: int = 2
 
+# Parámetros y valores por defecto para el Anexo (Punto 1: Reseñas de Eventos)
+DEFAULT_REVIEWS_COLLECTION: str = "resenas"
+MIN_REVIEW_RATING: int = 1
+MAX_REVIEW_RATING: int = 5
+
+DEFAULT_SAMPLE_REVIEWS: list[dict[str, Any]] = [
+    {
+        "user_name": "Sofía Martínez",
+        "event_name": "Marea acústica",
+        "rating": 5,
+        "comment": "Excelente acústico íntimo en Sala Diagonal. La voz y las guitarras sonaron impecables.",
+    },
+    {
+        "user_name": "Juan López",
+        "event_name": "Cóndores en vivo",
+        "rating": 5,
+        "comment": "Una fiesta de rock de principio a fin en el Estadio Ciudad. El solo de viola fue descomunal.",
+    },
+    {
+        "user_name": "Lucía Romero",
+        "event_name": "Marea acústica",
+        "rating": 4,
+        "comment": "Gran recital folklórico y muy buena acústica, aunque la barra demoraba un poco en atender.",
+    },
+    {
+        "user_name": "Martín Díaz",
+        "event_name": "Noche Pulso",
+        "rating": 4,
+        "comment": "Sets de electrónica contundentes en Club Río, luces y puesta en escena de primer nivel.",
+    },
+    {
+        "user_name": "Valentina Ruiz",
+        "event_name": "Cóndores en vivo",
+        "rating": 4,
+        "comment": "Muy buen recital y energía arrolladora de la banda. El ingreso al estadio fue ágil y ordenado.",
+    },
+    {
+        "user_name": "Tomás Herrera",
+        "event_name": "Noche Pulso",
+        "rating": 5,
+        "comment": "Increíble ambiente nocturno y sonido envolvente. Superó ampliamente mis expectativas.",
+    },
+]
+
 
 def _is_running_in_docker() -> bool:
     """Verifica si el proceso actual se ejecuta dentro de un contenedor Docker.
