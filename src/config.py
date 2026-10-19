@@ -133,6 +133,25 @@ DEFAULT_SAMPLE_REVIEWS: list[dict[str, Any]] = [
     },
 ]
 
+# Parámetros y valores por defecto para el Anexo (Punto 2: Historial de Precios)
+DEFAULT_INITIAL_PRICE_DATE: str = "2026-01-01"
+DEFAULT_PRICE_HISTORY_EVENT_NAME: str = "Rock del Lago"
+
+DEFAULT_SAMPLE_PRICE_CHANGES: list[dict[str, Any]] = [
+    {
+        "change_date": "2026-03-15",
+        "new_price": 42000,
+    },
+    {
+        "change_date": "2026-06-01",
+        "new_price": 46000,
+    },
+    {
+        "change_date": "2026-09-01",
+        "new_price": 50000,
+    },
+]
+
 
 def _is_running_in_docker() -> bool:
     """Verifica si el proceso actual se ejecuta dentro de un contenedor Docker.

@@ -1,12 +1,7 @@
-"""Módulo para la gestión de reseñas de eventos y requerimientos del Anexo (Punto 1).
+"""Módulo para la resolución de requerimientos del Anexo (Puntos 1 y 2).
 
-Implementa las operaciones de persistencia políglota y reglas de negocio para:
-1. Calificar (1 a 5) y comentar eventos pasados para los cuales el usuario tiene
-   una compra confirmada, permitiendo exactamente una reseña por evento por usuario.
-2. Demostración interactiva de casos válidos y múltiples casos rechazados.
-3. Carga y siembra de al menos 6 reseñas de diferentes usuarios con compras confirmadas.
-4. Consulta y agregación de promedios de calificación por evento y por artista
-   (agrupando todos los eventos de cada artista).
+Implementa la validación y gestión de reseñas de eventos pasados con compra confirmada,
+así como el registro temporal y visualización gráfica del historial de precios de eventos.
 """
 
 from datetime import datetime, timezone
@@ -16,8 +11,20 @@ from neo4j import Driver
 from pymongo.database import Database
 
 try:
+    import matplotlib.dates as mdates
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as ticker
+except ImportError:
+    plt = None  # type: ignore
+    mdates = None  # type: ignore
+    ticker = None  # type: ignore
+
+try:
     from config import (
+        DEFAULT_INITIAL_PRICE_DATE,
+        DEFAULT_PRICE_HISTORY_EVENT_NAME,
         DEFAULT_REVIEWS_COLLECTION,
+        DEFAULT_SAMPLE_PRICE_CHANGES,
         DEFAULT_SAMPLE_REVIEWS,
         MAX_REVIEW_RATING,
         MIN_REVIEW_RATING,
@@ -27,7 +34,10 @@ try:
     from queries import execute_mongo_aggregation, execute_neo4j_query
 except ImportError:
     from src.config import (
+        DEFAULT_INITIAL_PRICE_DATE,
+        DEFAULT_PRICE_HISTORY_EVENT_NAME,
         DEFAULT_REVIEWS_COLLECTION,
+        DEFAULT_SAMPLE_PRICE_CHANGES,
         DEFAULT_SAMPLE_REVIEWS,
         MAX_REVIEW_RATING,
         MIN_REVIEW_RATING,
@@ -856,3 +866,556 @@ def demonstrate_reviews_flow(
     print("FIN DE LA DEMOSTRACIÓN: 1 caso válido y 1 caso rechazado validados exitosamente.")
     print("=" * 80)
     return results
+
+
+# ==============================================================================
+# ANEXO: PUNTO 2 - HISTORIAL DE PRECIOS
+# Consignas:
+# 1. Cada cambio de precio de un evento debe quedar registrado con su fecha.
+#    El precio del dataset se considera vigente desde el 2026-01-01.
+# 2. Registrar al menos 3 cambios de precio sobre un mismo evento.
+# 3. Consultar el precio vigente de un evento en una fecha dada.
+# 4. Graficar la evolución del precio de ese evento.
+# ==============================================================================
+
+
+def init_price_history(
+    db_mongo: Database,
+    driver_neo4j: Optional[Driver] = None,
+    initial_date: str = DEFAULT_INITIAL_PRICE_DATE,
+) -> int:
+    """Inicializa el historial de precios en todos los eventos del catálogo.
+
+    Establece el precio base provisto en el dataset como vigente a partir de la fecha
+    inicial estipulada (2026-01-01). Es una operación estrictamente idempotente.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        driver_neo4j: Driver opcional de Neo4j para sincronización.
+        initial_date: Fecha de inicio de vigencia del catálogo (por defecto '2026-01-01').
+
+    Returns:
+        Cantidad de eventos en los que se inicializó el historial.
+    """
+    events = list(db_mongo.eventos.find({}))
+    initialized_count = 0
+
+    for event in events:
+        eid = int(event["evento_id"])
+        history = event.get("historial_precios")
+
+        if not history or not isinstance(history, list):
+            initial_price = int(event.get("precio", 0))
+            base_entry = {
+                "precio": initial_price,
+                "fecha_desde": initial_date,
+                "fecha_hasta": None,
+            }
+            db_mongo.eventos.update_one(
+                {"evento_id": eid},
+                {"$set": {"historial_precios": [base_entry]}},
+            )
+            initialized_count += 1
+
+            # Sincronización en Neo4j si corresponde
+            if driver_neo4j is not None:
+                try:
+                    query_neo = """
+                    MATCH (e:Evento {id: $eid})
+                    SET e.precio = $price
+                    """
+                    execute_neo4j_query(driver_neo4j, query_neo, {"eid": eid, "price": initial_price})
+                except Exception:
+                    pass
+
+    return initialized_count
+
+
+def register_price_change(
+    db_mongo: Database,
+    event: Union[int, str],
+    new_price: int,
+    change_date: str,
+    driver_neo4j: Optional[Driver] = None,
+    initial_date: str = DEFAULT_INITIAL_PRICE_DATE,
+) -> dict[str, Any]:
+    """Registra un cambio de precio para un evento cerrando el periodo anterior.
+
+    Garantiza consistencia temporal cerrando la vigencia del precio anterior (fecha_hasta)
+    y abriendo la vigencia del nuevo precio (fecha_desde). Actualiza el precio actual
+    en MongoDB y Neo4j sin alterar compras históricas pasadas.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        event: Identificador numérico o nombre completo del evento.
+        new_price: Nuevo valor monetario de la entrada (entero positivo > 0).
+        change_date: Fecha efectiva en la que entra en vigencia el nuevo precio (YYYY-MM-DD).
+        driver_neo4j: Driver opcional de Neo4j para reflejar el precio vigente.
+        initial_date: Fecha base por defecto en caso de requerir inicialización.
+
+    Returns:
+        Diccionario con el detalle del cambio de precio registrado.
+
+    Raises:
+        ValueError: Si el precio es menor o igual a cero o la fecha es cronológicamente inválida.
+    """
+    if new_price <= 0:
+        raise ValueError(
+            f"El nuevo precio debe ser estrictamente mayor a 0 (principio Fail-Closed). "
+            f"Recibido: {new_price}."
+        )
+
+    # Resolución dinámica del evento
+    event_id, event_name, _, _ = resolve_event(db_mongo, event)
+    event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    if not event_doc:
+        raise ValueError(f"Evento no encontrado: {event_id}.")
+
+    # Asegurar inicialización previa si no posee historial
+    history: list[dict[str, Any]] = event_doc.get("historial_precios", [])
+    if not history:
+        current_catalog_price = int(event_doc.get("precio", new_price))
+        history = [
+            {
+                "precio": current_catalog_price,
+                "fecha_desde": initial_date,
+                "fecha_hasta": None,
+            }
+        ]
+
+    # Validar formato de fecha ISO
+    try:
+        new_date_dt = datetime.strptime(change_date, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"Formato de fecha inválido '{change_date}'. Debe ser YYYY-MM-DD.")
+
+    # Validar cronología con la entrada activa
+    active_entry = next((item for item in history if item.get("fecha_hasta") is None), None)
+    if active_entry:
+        active_date_dt = datetime.strptime(active_entry["fecha_desde"], "%Y-%m-%d")
+        if new_date_dt <= active_date_dt:
+            raise ValueError(
+                f"La fecha del nuevo precio ({change_date}) debe ser posterior "
+                f"a la fecha del precio vigente ({active_entry['fecha_desde']})."
+            )
+        # Cerrar periodo vigente anterior
+        active_entry["fecha_hasta"] = change_date
+        old_price = active_entry["precio"]
+    else:
+        old_price = int(event_doc.get("precio", new_price))
+
+    # Incorporar nueva entrada de precio
+    new_entry: dict[str, Any] = {
+        "precio": new_price,
+        "fecha_desde": change_date,
+        "fecha_hasta": None,
+    }
+    history.append(new_entry)
+
+    # Persistir en MongoDB
+    db_mongo.eventos.update_one(
+        {"evento_id": event_id},
+        {
+            "$set": {
+                "precio": new_price,
+                "historial_precios": history,
+            }
+        },
+    )
+
+    # Sincronizar precio en Neo4j si se cuenta con el driver
+    if driver_neo4j is not None:
+        try:
+            query_neo = """
+            MATCH (e:Evento {id: $eid})
+            SET e.precio = $new_price
+            """
+            execute_neo4j_query(driver_neo4j, query_neo, {"eid": event_id, "new_price": new_price})
+        except Exception as exc:
+            print(f"[Neo4j] Advertencia al sincronizar precio de evento {event_id}: {exc}")
+
+    return {
+        "evento_id": event_id,
+        "evento_nombre": event_name,
+        "precio_anterior": old_price,
+        "precio_nuevo": new_price,
+        "fecha_cambio": change_date,
+        "total_registros_historial": len(history),
+    }
+
+
+def seed_sample_price_changes(
+    db_mongo: Database,
+    event: Union[int, str] = DEFAULT_PRICE_HISTORY_EVENT_NAME,
+    changes: Optional[list[dict[str, Any]]] = None,
+    driver_neo4j: Optional[Driver] = None,
+    initial_date: str = DEFAULT_INITIAL_PRICE_DATE,
+) -> list[dict[str, Any]]:
+    """Registra al menos 3 cambios de precio consecutivos sobre un mismo evento.
+
+    Cumple con la consigna de registrar al menos 3 variaciones temporales de precio,
+    asegurando inicialización e idempotencia.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        event: Identificador o nombre del evento objetivo. Por defecto 'Rock del Lago'.
+        changes: Lista opcional de diccionarios con 'change_date' y 'new_price'.
+        driver_neo4j: Driver opcional de Neo4j.
+        initial_date: Fecha de inicio de vigencia original ('2026-01-01').
+
+    Returns:
+        Lista completa de entradas del historial de precios del evento.
+    """
+    init_price_history(db_mongo, driver_neo4j=driver_neo4j, initial_date=initial_date)
+    event_id, event_name, _, _ = resolve_event(db_mongo, event)
+
+    sample_changes = changes if changes is not None else DEFAULT_SAMPLE_PRICE_CHANGES
+    event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    existing_history = event_doc.get("historial_precios", []) if event_doc else []
+    existing_dates = {entry.get("fecha_desde") for entry in existing_history}
+
+    for item in sample_changes:
+        c_date = item["change_date"]
+        c_price = int(item["new_price"])
+
+        if c_date in existing_dates:
+            continue
+
+        register_price_change(
+            db_mongo=db_mongo,
+            event=event_id,
+            new_price=c_price,
+            change_date=c_date,
+            driver_neo4j=driver_neo4j,
+            initial_date=initial_date,
+        )
+
+    updated_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    final_history = updated_doc.get("historial_precios", []) if updated_doc else []
+    print(
+        f"[Historial de Precios] Evento '{event_name}' (ID {event_id}): "
+        f"{len(final_history)} estados de precio registrados (al menos 3 modificaciones)."
+    )
+    return final_history
+
+
+def get_event_price_at_date(
+    db_mongo: Database,
+    event: Union[int, str],
+    target_date: str,
+) -> dict[str, Any]:
+    """Consulta y retorna el precio que se encontraba formalmente vigente en una fecha dada.
+
+    Busca en el historial del evento el intervalo que satisface:
+    fecha_desde <= target_date < fecha_hasta (o fecha_hasta es None).
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        event: Identificador numérico o nombre completo del evento.
+        target_date: Fecha consultada en formato ISO (YYYY-MM-DD).
+
+    Returns:
+        Diccionario con la información del precio vigente e intervalo de validez.
+
+    Raises:
+        ValueError: Si el formato de fecha es incorrecto o el evento no existe.
+    """
+    event_id, event_name, catalog_price, _ = resolve_event(db_mongo, event)
+
+    try:
+        target_dt = datetime.strptime(target_date, "%Y-%m-%d")
+    except ValueError:
+        raise ValueError(f"Formato de fecha inválido '{target_date}'. Debe ser YYYY-MM-DD.")
+
+    event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    if not event_doc:
+        raise ValueError(f"Evento {event_id} no encontrado.")
+
+    history = event_doc.get("historial_precios", [])
+    if not history:
+        # Si aún no tiene array de historial, su precio vigente proviene del catálogo desde 2026-01-01
+        history = [
+            {
+                "precio": catalog_price,
+                "fecha_desde": DEFAULT_INITIAL_PRICE_DATE,
+                "fecha_hasta": None,
+            }
+        ]
+
+    # Verificar si la fecha es anterior al inicio de vigencia del sistema
+    initial_date_dt = datetime.strptime(DEFAULT_INITIAL_PRICE_DATE, "%Y-%m-%d")
+    if target_dt < initial_date_dt:
+        return {
+            "evento_id": event_id,
+            "evento_nombre": event_name,
+            "fecha_consultada": target_date,
+            "precio_vigente": None,
+            "mensaje": (
+                f"La fecha consultada ({target_date}) es anterior a la fecha inicial "
+                f"del catálogo ({DEFAULT_INITIAL_PRICE_DATE}). No había precio definido."
+            ),
+        }
+
+    # Buscar el intervalo correspondiente
+    for entry in history:
+        f_desde = datetime.strptime(entry["fecha_desde"], "%Y-%m-%d")
+        f_hasta_str = entry.get("fecha_hasta")
+
+        if f_hasta_str:
+            f_hasta = datetime.strptime(f_hasta_str, "%Y-%m-%d")
+            if f_desde <= target_dt < f_hasta:
+                return {
+                    "evento_id": event_id,
+                    "evento_nombre": event_name,
+                    "fecha_consultada": target_date,
+                    "precio_vigente": int(entry["precio"]),
+                    "fecha_desde": entry["fecha_desde"],
+                    "fecha_hasta": f_hasta_str,
+                }
+        else:
+            if f_desde <= target_dt:
+                return {
+                    "evento_id": event_id,
+                    "evento_nombre": event_name,
+                    "fecha_consultada": target_date,
+                    "precio_vigente": int(entry["precio"]),
+                    "fecha_desde": entry["fecha_desde"],
+                    "fecha_hasta": None,
+                }
+
+    # Si por alguna discrepancia no encajara en intervalos intermedios, devolver último disponible
+    last_entry = history[-1]
+    return {
+        "evento_id": event_id,
+        "evento_nombre": event_name,
+        "fecha_consultada": target_date,
+        "precio_vigente": int(last_entry["precio"]),
+        "fecha_desde": last_entry["fecha_desde"],
+        "fecha_hasta": last_entry.get("fecha_hasta"),
+    }
+
+
+def get_event_price_history(
+    db_mongo: Database,
+    event: Union[int, str],
+) -> list[dict[str, Any]]:
+    """Recupera la secuencia cronológica de precios de un evento.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        event: Identificador o nombre completo del evento.
+
+    Returns:
+        Lista de diccionarios con cada registro histórico ordenado cronológicamente.
+    """
+    event_id, event_name, catalog_price, _ = resolve_event(db_mongo, event)
+    event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    raw_history = event_doc.get("historial_precios", []) if event_doc else []
+
+    if not raw_history:
+        return [
+            {
+                "evento_id": event_id,
+                "evento_nombre": event_name,
+                "precio": catalog_price,
+                "fecha_desde": DEFAULT_INITIAL_PRICE_DATE,
+                "fecha_hasta": None,
+            }
+        ]
+
+    result = []
+    for entry in raw_history:
+        result.append({
+            "evento_id": event_id,
+            "evento_nombre": event_name,
+            "precio": int(entry["precio"]),
+            "fecha_desde": entry["fecha_desde"],
+            "fecha_hasta": entry.get("fecha_hasta"),
+        })
+    return result
+
+
+def plot_event_price_evolution(
+    db_mongo: Database,
+    event: Union[int, str] = DEFAULT_PRICE_HISTORY_EVENT_NAME,
+    end_date: Optional[str] = None,
+    show_plot: bool = True,
+) -> tuple[Any, Any]:
+    """Genera un gráfico escalonado de la evolución del precio de un evento con Matplotlib.
+
+    Representa cómo el precio se mantiene constante en cada escalón temporal
+    y cambia escalonadamente en cada fecha de ajuste, formateando valores monetarios y fechas.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        event: Identificador o nombre del evento a graficar.
+        end_date: Fecha final del eje temporal (por defecto la fecha del evento o 2026-12-31).
+        show_plot: Si es True, invoca plt.show() para visualizar en pantalla/notebook.
+
+    Returns:
+        Tupla con los objetos (fig, ax) de Matplotlib.
+
+    Raises:
+        RuntimeError: Si la librería Matplotlib no se encuentra instalada en el entorno.
+        ValueError: Si el evento no posee registros de precios.
+    """
+    if plt is None:
+        raise RuntimeError("Matplotlib no se encuentra disponible en el entorno actual.")
+
+    event_id, event_name, _, _ = resolve_event(db_mongo, event)
+    event_doc = db_mongo.eventos.find_one({"evento_id": event_id})
+    history = get_event_price_history(db_mongo, event_id)
+
+    if not history:
+        raise ValueError(f"No hay registros de historial de precios para el evento '{event_name}'.")
+
+    event_date_str = event_doc.get("fecha", "2026-12-31") if event_doc else "2026-12-31"
+    cutoff_date = end_date or event_date_str
+
+    # Construir puntos de la función escalonada (step plot)
+    plot_dates: list[datetime] = []
+    plot_prices: list[int] = []
+
+    for entry in history:
+        d_start = datetime.strptime(entry["fecha_desde"], "%Y-%m-%d")
+        price = entry["precio"]
+        plot_dates.append(d_start)
+        plot_prices.append(price)
+
+    # Añadir punto final de cierre en la fecha de realización del evento para extender el último escalón
+    final_dt = datetime.strptime(cutoff_date, "%Y-%m-%d")
+    last_price = plot_prices[-1]
+
+    dates_for_step = list(plot_dates)
+    prices_for_step = list(plot_prices)
+    if final_dt > dates_for_step[-1]:
+        dates_for_step.append(final_dt)
+        prices_for_step.append(last_price)
+
+    # Configuración de figura
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=100)
+
+    # Gráfico escalonado (post: el precio rige desde la fecha hasta el siguiente salto)
+    ax.step(
+        dates_for_step,
+        prices_for_step,
+        where="post",
+        color="#2b5c8f",
+        linewidth=2.5,
+        label="Precio oficial",
+    )
+
+    # Resaltar puntos de cambio con marcadores
+    ax.scatter(
+        plot_dates,
+        plot_prices,
+        color="#d9534f",
+        s=70,
+        zorder=5,
+        label="Hitos de ajuste",
+    )
+
+    # Anotaciones de valor monetario sobre cada salto
+    for dt_pt, pr_pt in zip(plot_dates, plot_prices):
+        ax.annotate(
+            f"${pr_pt:,.0f}".replace(",", "."),
+            xy=(dt_pt, pr_pt),
+            xytext=(0, 12),
+            textcoords="offset points",
+            ha="center",
+            fontsize=9,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.3", fc="#fdf7e7", ec="#e0c280", lw=1, alpha=0.9),
+        )
+
+    # Estética y formato de ejes
+    ax.set_title(
+        f"Evolución Histórica del Precio de Entradas — {event_name}",
+        fontsize=13,
+        fontweight="bold",
+        pad=15,
+    )
+    ax.set_xlabel("Fecha de Vigencia", fontsize=10, labelpad=8)
+    ax.set_ylabel("Precio por Entrada ($ ARS)", fontsize=10, labelpad=8)
+    ax.yaxis.set_major_formatter(ticker.StrMethodFormatter("${x:,.0f}"))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+
+    # Ajuste de límites verticales para mayor legibilidad
+    y_min = min(plot_prices) * 0.90
+    y_max = max(plot_prices) * 1.15
+    ax.set_ylim(y_min, y_max)
+
+    ax.grid(True, linestyle="--", alpha=0.6)
+    ax.legend(loc="upper left", frameon=True)
+    fig.tight_layout()
+
+    if show_plot:
+        plt.show()
+
+    return fig, ax
+
+
+def demonstrate_price_history_flow(
+    db_mongo: Database,
+    driver_neo4j: Optional[Driver] = None,
+    target_event: Union[int, str] = DEFAULT_PRICE_HISTORY_EVENT_NAME,
+    query_date: str = "2026-05-15",
+) -> dict[str, Any]:
+    """Demuestra integralmente todos los requerimientos del Punto 2 del Anexo.
+
+    1. Inicializa precios base desde el 2026-01-01.
+    2. Registra al menos 3 cambios de precio sobre un mismo evento.
+    3. Consulta el precio vigente en una fecha dada.
+    4. Grafica la evolución temporal del precio del evento.
+
+    Args:
+        db_mongo: Instancia de base de datos de MongoDB.
+        driver_neo4j: Driver opcional de Neo4j.
+        target_event: Evento objetivo para la prueba. Por defecto 'Rock del Lago'.
+        query_date: Fecha de prueba para consultar el precio vigente (ej. '2026-05-15').
+
+    Returns:
+        Diccionario con los resultados de la demostración.
+    """
+    print("=" * 80)
+    print("DEMOSTRACIÓN: HISTORIAL Y EVOLUCIÓN DE PRECIOS (ANEXO - PUNTO 2)")
+    print("=" * 80)
+
+    # 1. Inicialización de catálogo a 2026-01-01
+    init_price_history(db_mongo, driver_neo4j=driver_neo4j)
+
+    # 2. Registrar al menos 3 cambios de precio
+    event_id, event_name, _, _ = resolve_event(db_mongo, target_event)
+    history = seed_sample_price_changes(db_mongo, event=event_id, driver_neo4j=driver_neo4j)
+
+    print(f"\n--- Historial Cronológico de Precios de '{event_name}' (ID {event_id}) ---")
+    for idx, reg in enumerate(history, start=1):
+        hasta_str = reg.get("fecha_hasta") or "Vigente"
+        print(
+            f"  {idx}. Desde: {reg['fecha_desde']} | Hasta: {hasta_str:<10} "
+            f"| Precio: ${reg['precio']:>6,.0f}"
+        )
+
+    # 3. Consulta de precio vigente a una fecha dada
+    print(f"\n--- Consulta de Precio Vigente a la Fecha: {query_date} ---")
+    price_info = get_event_price_at_date(db_mongo, event_id, target_date=query_date)
+    print(f"  * Evento: {price_info['evento_nombre']} (ID {price_info['evento_id']})")
+    print(f"  * Fecha Consultada: {price_info['fecha_consultada']}")
+    print(f"  * Precio Vigente: ${price_info['precio_vigente']:,.0f}")
+    print(f"  * Intervalo Válido: [{price_info['fecha_desde']} a {price_info.get('fecha_hasta') or 'presente'}]")
+
+    # 4. Generación del gráfico
+    print(f"\n--- Generando Gráfico de Evolución de Precios para '{event_name}' ---")
+    fig, _ = plot_event_price_evolution(db_mongo, event_id, show_plot=True)
+
+    print("\n" + "=" * 80)
+    print("FIN DE LA DEMOSTRACIÓN: Historial de precios y gráfico validados con éxito.")
+    print("=" * 80)
+
+    return {
+        "event_id": event_id,
+        "event_name": event_name,
+        "price_history": history,
+        "query_at_date": price_info,
+        "figure": fig,
+    }
