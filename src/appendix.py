@@ -1406,3 +1406,85 @@ def demonstrate_price_history_flow(
         "query_at_date": price_info,
         "figure": fig,
     }
+
+
+# ==============================================================================
+# ANEXO: PUNTO 3 - RECOMENDACIÓN DE DOS SALTOS
+# ==============================================================================
+
+
+def recommend_events_two_hops(
+    user: Union[int, str],
+    driver_neo4j: Driver,
+    db_mongo: Optional[Database] = None,
+    reference_date: str = REFERENCE_DATE,
+) -> list[dict[str, Any]]:
+    """Recomienda a un usuario eventos futuros de artistas similares a los que siguen sus amigos.
+
+    Implementa una navegación por el grafo en dos saltos:
+    1. Primer salto (social): Amigos del usuario y los artistas que ellos siguen
+       (:Usuario)-[:AMIGO_DE]-(:Usuario)-[:SIGUE]->(:Artista)
+    2. Segundo salto (similitud): Artistas afines a los seguidos por sus amigos
+       (:Artista)-[:SIMILAR_A]->(:Artista)
+    3. Conexión a eventos: Eventos futuros en los que participan dichos artistas similares
+       (:Artista)-[:PARTICIPA_EN]->(:Evento)
+
+    Aplica estrictamente las exclusiones estipuladas por la consigna:
+    - Excluye artistas que el usuario ya sigue directamente.
+    - Excluye eventos para los que el usuario ya posee una compra confirmada.
+    - Considera únicamente eventos futuros (fecha >= reference_date).
+
+    Args:
+        user: Identificador numérico o nombre completo del usuario objetivo.
+        driver_neo4j: Driver de conexión a Neo4j para ejecutar la consulta Cypher.
+        db_mongo: Instancia opcional de MongoDB para resolver dinámicamente nombres e identificadores.
+        reference_date: Fecha de corte en formato ISO (YYYY-MM-DD). Por defecto '2026-10-01'.
+
+    Returns:
+        Lista de diccionarios ordenados cronológicamente con:
+        'evento_id', 'evento', 'artista', 'fecha', 'genero', 'amigos_seguidores' y 'artistas_base'.
+    """
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+
+    if db_mongo is not None:
+        try:
+            user_id, user_name = resolve_user(db_mongo, user)
+        except Exception:
+            if isinstance(user, int):
+                user_id = user
+            else:
+                user_name = str(user)
+    else:
+        if isinstance(user, int):
+            user_id = user
+        else:
+            user_name = str(user)
+
+    query = """
+    MATCH (u:Usuario)
+    WHERE (u.id = $user_id OR u.nombre = $user_name)
+    MATCH (u)-[:AMIGO_DE]-(amigo:Usuario)-[:SIGUE]->(artAmigo:Artista)
+    WHERE amigo <> u
+    MATCH (artAmigo)-[:SIMILAR_A]->(recArt:Artista)-[:PARTICIPA_EN]->(ev:Evento)
+    WHERE recArt <> artAmigo
+      AND ev.fecha >= $ref_date
+      AND NOT (u)-[:SIGUE]->(recArt)
+      AND NOT (u)-[:COMPRO {estado: 'confirmada'}]->(ev)
+    RETURN DISTINCT
+        ev.id AS evento_id,
+        ev.nombre AS evento,
+        recArt.nombre AS artista,
+        ev.fecha AS fecha,
+        ev.genero AS genero,
+        collect(DISTINCT amigo.nombre) AS amigos_seguidores,
+        collect(DISTINCT artAmigo.nombre) AS artistas_base
+    ORDER BY ev.fecha ASC, evento ASC
+    """
+    parameters = {
+        "user_id": user_id,
+        "user_name": user_name,
+        "ref_date": reference_date,
+    }
+    return execute_neo4j_query(driver_neo4j, query=query, parameters=parameters)
+
