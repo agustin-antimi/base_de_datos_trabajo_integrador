@@ -18,7 +18,7 @@
 | **1. Carga Inicial y Distribución** | [`src/functions.py`](src/functions.py) | `[x] Completo` | `[x] Integrado` | Pipeline ETL completo: Mongo $\rightarrow$ Neo4j $\rightarrow$ Sanitización $\rightarrow$ Redis. |
 | **2. Flujo de Compra y Transacciones** | [`src/purchase.py`](src/purchase.py) | `[x] Completo` | `[x] Integrado` | Sesiones (30m), reservas (10m), confirmación atómica y 3 casos de prueba. |
 | **3. Consultas Políglotas (12)** | [`src/queries.py`](src/queries.py) | `[x] Completo` | `[x] Integrado` | 12 consultas con nombres, filtros temporales y ordenamientos correctos. |
-| **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[ ] Pendiente` | Lógica estadística y Matplotlib completas; pendiente volcado al notebook. |
+| **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[x] Integrado` | Lógica estadística y visualizaciones Matplotlib integradas en el notebook. |
 | **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
 | **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
@@ -45,19 +45,19 @@ graph LR
 - [x] **Tarea 1.1:** Implementar en [`src/queries.py`](src/queries.py) la consulta Cypher `get_artist_followers_count(driver)` para consultar en Neo4j la cantidad de usuarios que siguen a cada artista (`(:Usuario)-[:SIGUE]->(:Artista)`), ordenados de mayor a menor.
 - [x] **Tarea 1.2:** Implementar en [`src/queries.py`](src/queries.py) la consulta `get_tickets_sold_per_venue(driver, db_mongo)` para calcular las entradas vendidas acumuladas por lugar o recinto, cruzando compras con lugares.
 - [x] **Tarea 1.3:** Adaptar [`src/analytics.py`](src/analytics.py) para visualización interactiva exclusiva en pantalla/notebook, eliminando `save_path` y la persistencia a disco innecesaria para prevenir `FileNotFoundError`.
-- [ ] **Tarea 1.4:** Revisar y certificar docstrings en estilo Google y anotaciones de tipo estrictas en [`src/analytics.py`](src/analytics.py) y [`src/queries.py`](src/queries.py).
+- [x] **Tarea 1.4:** Revisar y certificar docstrings en estilo Google y anotaciones de tipo estrictas en [`src/analytics.py`](src/analytics.py) y [`src/queries.py`](src/queries.py).
 
 ---
 
 ### 🔹 Fase 2: Integración de la Sección 4 en el Notebook (`TP_Integrador.ipynb`)
 **Objetivo:** Volcar en celdas de Markdown y código ejecutables las estadísticas analíticas y los gráficos de Matplotlib generados directamente desde las bases de datos.
 
-- [ ] **Tarea 2.1:** Encabezado explicativo de la **Sección 4: Estadísticas y Gráficos**, justificando la arquitectura desacoplada en dos capas (cálculo estadístico puro + visualización).
-- [ ] **Tarea 2.2 — Métrica 4.1:** Celda para *Cantidad de seguidores por artista* (consulta a Neo4j $\rightarrow$ `build_artist_followers_stats` $\rightarrow$ visualización con DataFrame y gráfico de barras verticales).
-- [ ] **Tarea 2.3 — Métrica 4.2:** Celda para *Recaudación por evento* (consulta a MongoDB $\rightarrow$ `build_event_revenue_stats` $\rightarrow$ visualización con DataFrame y gráfico de barras horizontales formateado en moneda).
-- [ ] **Tarea 2.4 — Métrica 4.3:** Celda para *Entradas vendidas por lugar* (consulta a Neo4j/Mongo $\rightarrow$ `build_venue_tickets_stats` $\rightarrow$ gráfico de barras).
-- [ ] **Tarea 2.5 — Métrica 4.4:** Celda para *Cantidad de búsquedas por género* (consulta al Sorted Set en Redis $\rightarrow$ `build_genre_searches_stats` $\rightarrow$ gráfico).
-- [ ] **Tarea 2.6 — Dashboard Integrado:** Celda opcional que invoque `plot_combined_dashboard` para mostrar un panel unificado 2x2 de alta calidad.
+- [x] **Tarea 2.1:** Encabezado explicativo de la **Sección 4: Estadísticas y Gráficos**, justificando la arquitectura desacoplada en dos capas (cálculo estadístico puro + visualización).
+- [x] **Tarea 2.2 — Métrica 4.1:** Celda para *Cantidad de seguidores por artista* (consulta a Neo4j $\rightarrow$ `build_artist_followers_stats` $\rightarrow$ visualización con DataFrame y gráfico de barras verticales).
+- [x] **Tarea 2.3 — Métrica 4.2:** Celda para *Recaudación por evento* (consulta a MongoDB $\rightarrow$ `build_event_revenue_stats` $\rightarrow$ visualización con DataFrame y gráfico de barras horizontales formateado en moneda).
+- [x] **Tarea 2.4 — Métrica 4.3:** Celda para *Entradas vendidas por lugar* (consulta a Neo4j/Mongo $\rightarrow$ `build_venue_tickets_stats` $\rightarrow$ gráfico de barras).
+- [x] **Tarea 2.5 — Métrica 4.4:** Celda para *Cantidad de búsquedas por género* (consulta al Sorted Set en Redis $\rightarrow$ `build_genre_searches_stats` $\rightarrow$ gráfico).
+- [x] **Tarea 2.6 — Dashboard Integrado:** Celda opcional que invoque `plot_combined_dashboard` para mostrar un panel unificado 2x2 de alta calidad.
 
 ---
 
