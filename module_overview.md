@@ -64,7 +64,8 @@ src/
 ├── purchase.py           # Flujo transaccional de compra, reservas temporales y sesiones
 ├── queries.py            # Consultas políglotas (12 consignas + consultas analíticas auxiliares)
 ├── analytics.py          # Procesamiento estadístico puro y visualización con Matplotlib
-└── modifications.py      # Mutaciones multibase de la Sección 5 y generación de evidencias
+├── modifications.py      # Mutaciones multibase de la Sección 5 y generación de evidencias
+└── appendix.py           # Requerimientos del Anexo (Reseñas, Historial de Precios, Dos Saltos y Búsquedas)
 ```
 
 ---
@@ -81,6 +82,7 @@ src/
   * `SEARCH_CACHE_TTL_SECONDS = 300` (5 minutos): Tiempo de reutilización de consultas cacheadas.
   * `RELATION_MAPPINGS`: Mapeo explícito de campos relacionales que deben residir en Neo4j y ser sanitizados en MongoDB (`amigos`, `sigue`, `similares`, `artistas`).
   * Parámetros por defecto para la Sección 5: `DEFAULT_PRICE_INCREASE_PERCENTAGE` (10.0%), `DEFAULT_PRICE_INCREASE_CITY` ("Rosario"), `DEFAULT_SERVICE_NAME` ("accesibilidad"), `DEFAULT_CANCEL_EVENT_ID` (7), `DEFAULT_DELETE_USER_NAME` ("Tomás Herrera").
+  * Parámetros por defecto para el Anexo: `DEFAULT_REVIEWS_COLLECTION` ("resenas"), `MIN_REVIEW_RATING` (1), `MAX_REVIEW_RATING` (5), `DEFAULT_INITIAL_PRICE_DATE` ("2026-01-01"), `DEFAULT_PRICE_HISTORY_EVENT_NAME` ("Rock del Lago"), `DEFAULT_USER_RECENT_SEARCHES_LIMIT` (5).
 * **Helpers de Conexión:**
   * `get_mongo_client(uri)` / `get_mongo_db(db_name, uri)`: Cliente PyMongo autenticado.
   * `get_neo4j_driver(uri, user, password)`: Driver Bolt para Neo4j con pool de conexiones.
@@ -149,27 +151,28 @@ src/
 * **Capa Genérica:**
   * `execute_neo4j_query(driver, query, parameters)`: Ejecuta Cypher parametrizado y retorna listas de diccionarios planos.
   * `execute_mongo_aggregation(db, collection_name, pipeline)`: Ejecuta pipelines de agregación BSON.
+  * `execute_mongo_find(...)`: Ejecuta búsquedas en colecciones de MongoDB con filtros y ordenamientos.
   * `execute_redis_command(redis_client, command_name, *args)`: Ejecuta comandos nativos de Redis.
 * **Mapeo de las 12 Consultas del Trabajo Práctico:**
 
 | # | Función en `queries.py` | Motor | Tipo de Consulta | Regla de Negocio / Detalle |
 | :-: | :--- | :---: | :--- | :--- |
-| **1** | `get_users_attending_artist_events` | Neo4j | Cypher (`:COMPRO`, `:PARTICIPA_EN`) | Asistencia dinámica: compra confirmada y fecha de evento anterior a `REFERENCE_DATE`. Artista resuelto dinámicamente ("Los Cóndores Eléctricos"). |
+| **1** | `get_users_attended_artist_events` | Neo4j | Cypher (`:COMPRO`, `:PARTICIPA_EN`) | Asistencia dinámica: compra confirmada y fecha de evento anterior a `REFERENCE_DATE`. Artista resuelto dinámicamente ("Los Cóndores Eléctricos"). |
 | **2** | `get_friends_following_same_artists` | Neo4j | Cypher (`:AMIGO_DE`, `:SIGUE`) | Amigos de Juan López que comparten seguimiento a artistas. Muestra nombre del amigo y del artista. |
-| **3** | `recommend_artists_from_friends` | Neo4j | Cypher (Filtro colaborativo social) | Artistas que siguen amigos de Juan López que él no sigue, ordenados descendentemente por cantidad de amigos. |
-| **4** | `get_future_events_for_artists` | Neo4j + Redis | Combinada (Grafo + En Memoria) | Eventos futuros de los artistas recomendados (lugar, ciudad, fecha, precio) enriquecidos con `entradas_disponibles` desde Redis. |
+| **3** | `recommend_artists_followed_by_friends` | Neo4j | Cypher (Filtro colaborativo social) | Artistas que siguen amigos de Juan López que él no sigue, ordenados descendentemente por cantidad de amigos. |
+| **4** | `get_upcoming_events_for_artists` | Neo4j + Redis | Combinada (Grafo + En Memoria) | Eventos futuros de los artistas recomendados (lugar, ciudad, fecha, precio) enriquecidos con `entradas_disponibles` desde Redis. |
 | **5** | `get_similar_artists_not_followed` | Neo4j | Cypher (`:SIGUE`, `:SIMILAR_A`) | Filtro basado en contenido: artistas similares a los que sigue Lucía Romero y que ella aún no sigue. |
-| **6** | `get_future_events_by_city_and_price` | Neo4j | Cypher (`:SE_REALIZA_EN`) | Eventos futuros en La Plata con precio menor a $40.000 y estado activo. |
-| **7** | `count_future_events_by_genre` | MongoDB | `$match`, `$group`, `$project`, `$sort` | Agrupación de eventos activos con fecha $\ge$ `REFERENCE_DATE` por género musical. |
-| **8** | `get_total_spent_by_user` | MongoDB | `$match`, `$group`, `$lookup`, `$sort` | Gasto acumulado por usuario en compras confirmadas, ordenado de mayor a menor. |
+| **6** | `get_upcoming_events_by_city_and_max_price` | Neo4j | Cypher (`:SE_REALIZA_EN`) | Eventos futuros en La Plata con precio menor a $40.000 y estado activo. |
+| **7** | `get_upcoming_events_count_by_genre` | MongoDB | `$match`, `$group`, `$project`, `$sort` | Agrupación de eventos activos con fecha $\ge$ `REFERENCE_DATE` por género musical. |
+| **8** | `get_total_spent_per_user` | MongoDB | `$match`, `$group`, `$lookup`, `$sort` | Gasto acumulado por usuario en compras confirmadas, ordenado de mayor a menor. |
 | **9** | `get_tickets_sold_per_event` | MongoDB | `$lookup` correlacionado + `$project` | Entradas vendidas y total recaudado por evento, preservando eventos con 0 ventas. |
-| **10** | `get_online_users` | Redis + Mongo | Scan `session:user:*` + TTL | Usuarios conectados actualmente, TTL restante en segundos y minutos. |
+| **10** | `get_active_sessions` | Redis + Mongo | Scan `session:user:*` + TTL | Usuarios conectados actualmente, TTL restante en segundos y minutos. |
 | **11** | `get_active_reservations` | Redis + Mongo | Scan `reservation:*` + TTL | Reservas temporales no expiradas con tiempo restante formateado (mm:ss). |
 | **12** | `get_top_searched_genres` | Redis | `ZREVRANGE` sobre `searches:genre` | Top 3 géneros musicales más buscados consultando el Sorted Set en memoria. |
 
-* **Consultas de Apoyo Estadístico (Pendientes para Sección 4):**
+* **Consultas de Apoyo Estadístico (Integradas en `queries.py` para Sección 4):**
   * `get_artist_followers_count(driver)`: Conteo Cypher de seguidores por artista (`(:Usuario)-[:SIGUE]->(:Artista)`).
-  * `get_tickets_sold_per_venue(driver)`: Conteo Cypher de entradas vendidas acumuladas por recinto (`(:Lugar)<-[:SE_REALIZA_EN]-(:Evento)<-[:COMPRO]-(:Usuario)`).
+  * `get_tickets_sold_per_venue(driver, db_mongo)`: Conteo Cypher de entradas vendidas acumuladas por recinto (`(:Lugar)<-[:SE_REALIZA_EN]-(:Evento)<-[:COMPRO]-(:Usuario)`).
 
 ---
 
@@ -182,11 +185,11 @@ src/
   * `build_venue_tickets_stats(raw_records)`: Consolida entradas vendidas por recinto con porcentaje del total.
   * `build_genre_searches_stats(raw_records)`: Procesa tuplas del Sorted Set de Redis y computa el volumen relativo de búsquedas.
 * **Capa 2: Capa de Visualización con Matplotlib Puro (`plot_*`)**
-  * `plot_artist_followers(stats, ax, save_path)`: Gráfico de barras verticales de seguidores por artista.
-  * `plot_event_revenue(stats, ax, save_path)`: Gráfico de barras horizontales de recaudación por evento.
-  * `plot_tickets_by_venue(stats, ax, save_path)`: Gráfico de barras de entradas por lugar/recinto.
-  * `plot_genre_searches(stats, ax, save_path)`: Gráfico de barras de búsquedas por género.
-  * `plot_combined_dashboard(...)`: Dashboard ejecutivo 2x2 que renderiza las 4 métricas en una única figura de alta resolución.
+  * `plot_artist_followers(stats, ax)`: Gráfico de barras verticales de seguidores por artista.
+  * `plot_event_revenue(stats, ax)`: Gráfico de barras horizontales de recaudación por evento.
+  * `plot_venue_tickets(stats, ax)`: Gráfico de barras de entradas por lugar/recinto.
+  * `plot_genre_searches(stats, ax)`: Gráfico de barras de búsquedas por género.
+  * `plot_combined_dashboard(...)`: Dashboard ejecutivo 2x2 que renderiza las 4 métricas en una única figura interactiva para el notebook.
 * **Tokens de Diseño (`CHART_THEME`):** Paleta moderna Tailwind (Azul `#3B82F6`, Esmeralda `#10B981`, Púrpura `#8B5CF6`, Ámbar `#F59E0B`).
 
 ---
@@ -218,7 +221,7 @@ src/
     * Decisión y Justificación Contable: Las compras históricas **se preservan anonimizadas** (`usuario_id = None`, `usuario_eliminado = True`) en MongoDB para mantener la integridad contable de la productora y no alterar la recaudación real de los recitales.
     * Impacto Políglota:
       1. Redis: Eliminación de sesión activa y cancelación de reservas pendientes restituyendo stock.
-      2. Neo4j: Eliminación de relaciones `:AMIGO_DE`, `:SIGUE` y desvinculación o borrado del nodo `Usuario`.
+      2. Neo4j: Eliminación de relaciones `:AMIGO_DE`, `:SIGUE` y desvinculación del nodo `Usuario`.
       3. MongoDB: Eliminación del documento en `usuarios`.
     * Evidencia: `get_deleted_user_evidence(user_id=6, db_mongo, driver_neo4j, redis_client)`.
   * **5.5 Eliminación de amistades de un usuario:**
@@ -229,6 +232,36 @@ src/
 
 ---
 
+### 3.7 [`appendix.py`](src/appendix.py) — Requerimientos Adicionales del Anexo (Grupos de 3)
+
+* **Propósito:** Centralizar las soluciones para los cuatro requerimientos adicionales del Anexo estipulados en `CONSIGNAS.md`, combinando MongoDB, Neo4j, Redis y visualizaciones analíticas.
+* **Componentes y Funciones:**
+  * **Anexo 1: Reseñas de Eventos (MongoDB + Neo4j):**
+    * `create_review_indexes(db_mongo, driver_neo4j)`: Crea el índice único compuesto `{"usuario_id": 1, "evento_id": 1}` garantizando que un usuario califique como máximo una sola vez por evento.
+    * `validate_event_review(db_mongo, user, event, rating, comment, reference_date)`: Valida calificación (1-5), comentario no vacío, evento pasado (`fecha < REFERENCE_DATE`), compra confirmada previa y unicidad estricta.
+    * `create_event_review(...)`: Persiste la reseña en MongoDB y crea opcionalmente la relación `:CALIFICO` en Neo4j.
+    * `seed_sample_reviews(db_mongo, ...)`: Carga al menos 6 reseñas de diferentes usuarios.
+    * `get_average_ratings_per_event(db_mongo)` y `get_average_ratings_per_artist(db_mongo)`: Agregaciones BSON con `$group`, `$avg` y redondeo.
+    * `demonstrate_reviews_flow(...)`: Demuestra exactamente un caso válido aprobado y un caso rechazado con captura de excepción.
+  * **Anexo 2: Historial de Precios y Gráfico de Evolución (MongoDB + Matplotlib):**
+    * `init_price_history(db_mongo)`: Inicializa el historial para todos los eventos estableciendo vigencia desde `2026-01-01`.
+    * `register_price_change(db_mongo, event, new_price, change_date)`: Cierra la vigencia anterior (`fecha_hasta`) y abre el nuevo intervalo (`fecha_desde`) manteniendo la consistencia temporal.
+    * `seed_sample_price_changes(db_mongo)`: Registra 3 cambios de precio cronológicos sobre un mismo evento (ej. "Rock del Lago").
+    * `get_event_price_at_date(db_mongo, event, target_date)`: Consulta el precio vigente de un evento en una fecha determinada cualquiera.
+    * `plot_event_price_evolution(db_mongo, event)`: Genera un gráfico escalonado (*step plot*) con Matplotlib mostrando la evolución histórica del precio.
+    * `demonstrate_price_history_flow(...)`: Suite automatizada que ejecuta la inicialización, los 3 cambios, consulta a fecha dada y renderiza el gráfico.
+  * **Anexo 3: Recomendación de Dos Saltos (Neo4j):**
+    * `recommend_events_two_hops(user, driver_neo4j, db_mongo, reference_date)`:
+      * Navegación en 2 saltos: `(:Usuario)-[:AMIGO_DE]-(:Usuario)-[:SIGUE]->(:Artista)-[:SIMILAR_A]->(:Artista)-[:PARTICIPA_EN]->(:Evento)`.
+      * Exclusión estricta de artistas que el usuario ya sigue y de eventos para los que ya posee compra confirmada.
+      * Proyecta evento, artista, fecha, género y amigos de apoyo cronológicamente.
+  * **Anexo 4: Historial de Búsquedas en Redis y Recomendación Personalizada (Redis + Python):**
+    * `record_user_search(user_id, search_term, genre, redis_client)`: Almacena en Redis las últimas 5 búsquedas de cada usuario usando una Lista con `LPUSH` + `LTRIM 0 4` para descartar automáticamente las más viejas en $O(1)$.
+    * `get_user_recent_searches(user_id, redis_client)`: Recupera las búsquedas recientes del usuario.
+    * `recommend_events_two_hops_personalized(user, driver, db_mongo, redis_client)`: Reordena las recomendaciones del Punto 3 priorizando en primer lugar los eventos cuyo género coincida con las búsquedas recientes del usuario, preservando el orden cronológico secundario.
+
+---
+
 ## 4. Mapa de Interdependencias entre Módulos
 
 ```mermaid
@@ -236,9 +269,10 @@ graph TD
     CFG["src/config.py\n(Constantes, Conectores, Hooks)"]
     FN["src/functions.py\n(ETL, Sanitización, Stock Dinámico)"]
     PC["src/purchase.py\n(Flujo de Compra, Reservas, Sesiones)"]
-    QR["src/queries.py\n(12 Consultas Políglotas)"]
+    QR["src/queries.py\n(12 Consultas Políglotas + Helpers)"]
     AN["src/analytics.py\n(Estadísticas y Matplotlib)"]
     MD["src/modifications.py\n(Mutaciones Multibase y Evidencias)"]
+    AP["src/appendix.py\n(Reseñas, Precios, Dos Saltos, Búsquedas)"]
     NB["notebooks/TP_Integrador.ipynb\n(Orquestación y Entrega)"]
 
     FN -->|usa| CFG
@@ -246,15 +280,21 @@ graph TD
     QR -->|usa| CFG
     AN -->|usa| CFG
     MD -->|usa| CFG
-    MD -->|usa helpers de resolución| PC
+    AP -->|usa| CFG
 
+    MD -->|usa helpers de resolución| PC
+    AP -->|usa helpers de resolución| PC
+    AP -->|usa helpers de ejecución| QR
     AN -->|procesa datos de| QR
+
     NB -->|ejecuta e importa| CFG
     NB -->|ejecuta Sección 1| FN
     NB -->|ejecuta Sección 2| PC
     NB -->|ejecuta Sección 3| QR
-    NB -.->|pendiente: Sección 4| AN
-    NB -.->|pendiente: Sección 5| MD
+    NB -->|ejecuta Sección 4| AN
+    NB -->|ejecuta Sección 5| MD
+    NB -->|ejecuta Anexo 3| AP
+    NB -.->|pendiente: Anexo 1, 2 y 4| AP
 ```
 
 ---
@@ -270,25 +310,33 @@ graph TD
 | **2. Flujo de Compra** | Sesiones (30m), reservas (10m), confirmación, cancelación | `reserve_tickets`, `confirm_reservation`, `cancel_reservation` | `src/purchase.py` | `[x] Integrado` |
 | **2. Flujo de Compra** | Demostración de los 3 casos obligatorios | `demonstrate_purchase_flow` | `src/purchase.py` | `[x] Integrado` |
 | **3. Consultas** | 12 Consultas políglotas con nombres y detalles | Consultas 1 a 12 | `src/queries.py` | `[x] Integrado` |
-| **4. Estadísticas** | 4 Estadísticas agregadas de negocio | `build_*_stats` | `src/analytics.py` | `[-] Pendiente volcado` |
-| **4. Estadísticas** | Gráficos en Matplotlib desde la base | `plot_*`, `plot_combined_dashboard` | `src/analytics.py` | `[-] Pendiente volcado` |
-| **5. Modificaciones** | 5.1 Aumento de precios futuros en Rosario | `increase_future_events_price` | `src/modifications.py` | `[-] Pendiente volcado` |
-| **5. Modificaciones** | 5.2 Servicio accesibilidad a lugar 2 | `add_service_to_place` | `src/modifications.py` | `[-] Pendiente volcado` |
-| **5. Modificaciones** | 5.3 Cancelación evento 7 (reembolsos y cascada) | `cancel_event` | `src/modifications.py` | `[-] Pendiente volcado` |
-| **5. Modificaciones** | 5.4 Eliminación usuario 6 (justificación contable) | `delete_user` | `src/modifications.py` | `[-] Pendiente volcado` |
-| **5. Modificaciones** | 5.5 Eliminación de amistades | `delete_user_friendships` | `src/modifications.py` | `[-] Pendiente volcado` |
-| **5. Modificaciones** | Consultas de evidencia para cada cambio | `get_*_evidence` | `src/modifications.py` | `[-] Pendiente volcado` |
-| **6. Informe** | Preguntas conceptuales, arquitectura y diagramas | Markdown / PDF | `notebooks/` / Documento | `[ ] Pendiente redacción` |
+| **4. Estadísticas** | 4 Estadísticas agregadas de negocio | `build_*_stats` | `src/analytics.py` | `[x] Integrado` |
+| **4. Estadísticas** | Gráficos en Matplotlib desde la base | `plot_*`, `plot_combined_dashboard` | `src/analytics.py` | `[x] Integrado` |
+| **5. Modificaciones** | 5.1 Aumento de precios futuros en Rosario | `increase_future_events_price` | `src/modifications.py` | `[x] Integrado` |
+| **5. Modificaciones** | 5.2 Servicio accesibilidad a lugar 2 | `add_service_to_place` | `src/modifications.py` | `[x] Integrado` |
+| **5. Modificaciones** | 5.3 Cancelación evento 7 (reembolsos y cascada) | `cancel_event` | `src/modifications.py` | `[x] Integrado` |
+| **5. Modificaciones** | 5.4 Eliminación usuario 6 (justificación contable) | `delete_user` | `src/modifications.py` | `[x] Integrado` |
+| **5. Modificaciones** | 5.5 Eliminación de amistades | `delete_user_friendships` | `src/modifications.py` | `[x] Integrado` |
+| **5. Modificaciones** | Consultas de evidencia para cada cambio | `get_*_evidence` | `src/modifications.py` | `[x] Integrado` |
+| **Anexo 1** | Reseñas de eventos pasados con compra confirmada | `create_event_review`, `validate_event_review`, `seed_sample_reviews` | `src/appendix.py` | `[-] Pendiente volcado` |
+| **Anexo 2** | Historial de precios y gráfico escalonado | `init_price_history`, `register_price_change`, `plot_event_price_evolution` | `src/appendix.py` | `[-] Pendiente volcado` |
+| **Anexo 3** | Recomendación de dos saltos | `recommend_events_two_hops` | `src/appendix.py` | `[x] Integrado` (celda 36) |
+| **Anexo 4** | Historial de búsquedas en Redis y recomendación personalizada | `record_user_search`, `recommend_events_two_hops_personalized` | `src/appendix.py` | `[ ] Pendiente código y volcado` |
+| **6. Informe** | Preguntas conceptuales, arquitectura, diagramas y Anexo | Celdas Markdown en notebook | `notebooks/TP_Integrador.ipynb` | `[ ] Pendiente redacción` |
 
 ---
 
-## 6. Brechas Técnicas Detectadas y Pasos de Sincronización
+## 6. Estado Actual de Brechas y Tareas Pendientes
 
-1. **Consultas de Apoyo Faltantes en [`src/queries.py`](src/queries.py):**
-   * El módulo [`src/analytics.py`](src/analytics.py) cuenta con procesadores y gráficos para *Seguidores por Artista* y *Entradas por Recinto*, pero en `queries.py` aún no existen las funciones específicas de consulta (`get_artist_followers_count` y `get_tickets_sold_per_venue`).
-2. **Creación Automática de Carpetas en [`src/analytics.py`](src/analytics.py):**
-   * Si se pasa un `save_path` hacia un subdirectorio inexistente, `fig.savefig` arroja `FileNotFoundError`. Se requiere incorporar `Path(save_path).parent.mkdir(parents=True, exist_ok=True)`.
-3. **Celdas de Ejecución en [`notebooks/TP_Integrador.ipynb`](notebooks/TP_Integrador.ipynb):**
-   * El notebook actualmente se detiene en la celda de la Consulta 12 (línea 1730). Debe extenderse para incorporar las celdas ejecutables de la **Sección 4** (tablas estadísticas y gráficos Matplotlib) y de la **Sección 5** (las 5 modificaciones con sus respectivas evidencias antes y después).
-4. **Redacción del Informe Conceptual (Sección 6):**
-   * Responder dentro del notebook o en un documento anexo las preguntas sobre vencimiento de reservas, datos compartidos/desincronización y consistencia al eliminar entidades.
+1. **Desarrollo del Anexo 4 en [`src/appendix.py`](src/appendix.py):**
+   * Implementar `record_user_search` y `get_user_recent_searches` usando listas de Redis acotadas con `LPUSH` y `LTRIM 0 4`.
+   * Implementar `recommend_events_two_hops_personalized` para reordenar las recomendaciones priorizando géneros coincidentes con el historial reciente.
+2. **Volcado de Celdas del Anexo en [`notebooks/TP_Integrador.ipynb`](notebooks/TP_Integrador.ipynb):**
+   * Anexo 1: Celdas ejecutables para validación de caso exitoso y caso rechazado, siembra de 6 reseñas y tablas de promedios por evento y por artista.
+   * Anexo 2: Celdas ejecutables para inicialización, los 3 cambios de precio, consulta puntual y gráfico escalonado en Matplotlib.
+   * Anexo 4: Celdas de simulación de búsquedas en Redis y despliegue del DataFrame de recomendaciones reordenado.
+3. **Redacción del Informe Conceptual (Sección 6 e Informe del Anexo):**
+   * Incorporar en celdas Markdown dentro del notebook la tabla de persistencia políglota, la integración por identificadores canónicos, las respuestas a las 3 preguntas teóricas obligatorias y la justificación de diseño de los 4 requerimientos del Anexo.
+4. **Validación Integral y Empaquetado:**
+   * Ejecutar el notebook completo (*Restart Kernel & Run All Cells*) y empaquetar el archivo `.zip` final para entrega.
+

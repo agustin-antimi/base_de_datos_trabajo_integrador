@@ -4,7 +4,7 @@
 > **Institución:** Facultad de Informática / Ciencias Económicas — Universidad Nacional de La Plata (UNLP 2026)  
 > **Proyecto:** Sistema de Venta de Entradas y Recomendación de Eventos (Persistencia Políglota)  
 > **Referencia Principal:** [CONSIGNAS.md](CONSIGNAS.md) · **Directrices:** [AGENTS.md](AGENTS.md) · **Arquitectura:** [module_overview.md](module_overview.md)  
-> **Última actualización:** 15 de Octubre de 2026  
+> **Última actualización:** 19 de Octubre de 2026  
 
 ---
 
@@ -212,10 +212,10 @@ Este registro audita los hallazgos técnicos, vulnerabilidades de negocio y desf
   - **Detalle:** `analytics.py` tiene visualizadores para *Seguidores por artista* y *Entradas por lugar*, pero en `queries.py` no estaban creadas las funciones para extraer esos datos directamente desde Neo4j/MongoDB.
   - **Resolución:** Se implementaron `get_artist_followers_count(driver)` y `get_tickets_sold_per_venue(driver)` utilizando consultas Cypher parametrizadas con `OPTIONAL MATCH`.
 
-- [X] **BUG-08: Desconexión de Secciones 4 y 5 en el Notebook `TP_Integrador.ipynb`**
+- [x] **BUG-08: Desconexión de Secciones 4 y 5 en el Notebook `TP_Integrador.ipynb`**
   - **Ubicación:** `notebooks/TP_Integrador.ipynb`
-  - **Detalle:** El notebook actualmente concluye en la celda de la Consulta 12. Faltan las celdas ejecutables de la **Sección 4** (Estadísticas y gráficos con Matplotlib) y de la **Sección 5** (Modificaciones multibase con evidencia).
-  - **Acción requerida:** Incorporar las celdas correspondientes consumiendo `src/analytics.py` y `src/modifications.py`.
+  - **Detalle:** El notebook originalmente concluía en la celda de la Consulta 12. Faltaban las celdas ejecutables de la **Sección 4** (Estadísticas y gráficos con Matplotlib) y de la **Sección 5** (Modificaciones multibase con evidencia).
+  - **Resolución:** Se incorporaron exitosamente las celdas de Markdown y código ejecutables para la Sección 4 (métricas 4.1 a 4.4 más dashboard combinado) y la Sección 5 (mutaciones 5.1 a 5.5 con evidencias antes y después), conservando sus outputs visibles en el notebook.
 
 - [ ] **BUG-09: Falta implementar el Punto 4 del Anexo en `src/appendix.py` (Historial de Búsquedas en Redis)**
   - **Ubicación:** `src/appendix.py`
@@ -226,3 +226,9 @@ Este registro audita los hallazgos técnicos, vulnerabilidades de negocio y desf
   - **Ubicación:** `notebooks/TP_Integrador.ipynb`
   - **Detalle:** Solo el Punto 3 (Recomendación de dos saltos) se encuentra actualmente integrado en el notebook. Faltan las celdas interactivas para Reseñas de Eventos (Punto 1), Historial y Gráfico de Precios (Punto 2) e Historial de Búsquedas con Recomendación Personalizada (Punto 4).
   - **Acción requerida:** Agregar las celdas ejecutables con outputs correspondientes antes de la entrega final.
+
+- [x] **BUG-11: Funciones procesadoras intermedias redundantes en `src/functions.py`**
+  - **Ubicación:** `src/functions.py` (`process_user`, `process_artist`, `process_place`, `process_event`, `process_sale`)
+  - **Detalle:** Existían funciones auxiliares intermedias no utilizadas que duplicaban la lógica de ingesta y sanitización ya centralizada de forma atómica en `process_dataset` y sus etapas especializadas.
+  - **Resolución:** Se refactorizó y depuró `src/functions.py`, eliminando las 213 líneas de código no utilizado y consolidando el flujo exclusivamente en el pipeline principal.
+
