@@ -21,7 +21,11 @@
 | **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[x] Integrado` | Lógica estadística y visualizaciones Matplotlib integradas en el notebook. |
 | **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[x] Integrado` | Mutaciones 5.1 a 5.5 listas con evidencias; volcadas al notebook con ejecuciones. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
-| **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
+| **Anexo 1: Reseñas de Eventos** | [`src/appendix.py`](src/appendix.py) | `[x] Completo` | `[ ] Pendiente` | Calificación (1-5), comentario, validación de compra confirmada y unicidad; 6 reseñas y promedios por evento y artista. |
+| **Anexo 2: Historial de Precios** | [`src/appendix.py`](src/appendix.py) | `[x] Completo` | `[ ] Pendiente` | Registro temporal con fecha, 3 cambios sobre un evento, consulta a fecha dada y gráfico de evolución con Matplotlib. |
+| **Anexo 3: Recomendación de Dos Saltos** | [`src/appendix.py`](src/appendix.py) | `[x] Completo` | `[x] Integrado` | Recomendación en 2 saltos (`amigos` $\rightarrow$ `siguen` $\rightarrow$ `similares`), exclusiones de seguidos/comprados, ejecutado antes de modificaciones. |
+| **Anexo 4: Historial de Búsquedas por Usuario** | [`src/appendix.py`](src/appendix.py) / Redis | `[ ] Pendiente` | `[ ] Pendiente` | Registro de últimas 5 búsquedas en Redis (listas con `LPUSH` + `LTRIM`) y reordenamiento de recomendaciones por género coincidente. |
+| **Anexo: Justificaciones en Informe** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificación técnica de las bases y estructuras seleccionadas para los 4 requerimientos del Anexo. |
 
 ---
 
@@ -33,8 +37,9 @@ El plan de trabajo estructura las tareas pendientes en fases secuenciales orient
 graph LR
     F1[Fase 1: Módulos de Apoyo\nqueries.py y analytics.py] --> F2[Fase 2: Sección 4 en Notebook\nEstadísticas y Matplotlib]
     F2 --> F3[Fase 3: Sección 5 en Notebook\nModificaciones Multibase]
-    F3 --> F4[Fase 4: Sección 6 - Informe\nJustificaciones y Diagramas]
-    F4 --> F5[Fase 5: Validación E2E\nEjecución Limpia y Entrega]
+    F3 --> F4[Fase 4: Anexo Grupos de 3\nReseñas, Precios, Búsquedas]
+    F4 --> F5[Fase 5: Sección 6 - Informe\nJustificaciones y Diagramas]
+    F5 --> F6[Fase 6: Validación E2E\nEjecución Limpia y Entrega]
 ```
 
 ---
@@ -88,26 +93,75 @@ graph LR
 
 ---
 
-### 🔹 Fase 4: Redacción del Informe Conceptual (Sección 6)
-**Objetivo:** Desarrollar en celdas de Markdown dentro del notebook (o como documento adjunto) las explicaciones técnicas y teóricas exigidas por la cátedra.
+### 🔹 Fase 4: Implementación e Integración del Anexo (Requisitos para Grupos de 3)
+**Objetivo:** Desarrollar, probar e integrar en el notebook los cuatro requerimientos adicionales del Anexo estipulados en `CONSIGNAS.md`, garantizando persistencia políglota adecuada y validaciones estrictas de negocio.
 
-- [ ] **Tarea 4.1 — Arquitectura Políglota:** Cuadro/diagrama consolidado de qué se almacena en cada motor y su justificación técnica.
-- [ ] **Tarea 4.2 — Integración e Identificadores:** Explicar cómo se integran las bases (IDs canónicos compartidos `usuario_id`, `evento_id`, etc.) y qué consultas combinan más de una base (ej. Consulta 4 que combina Neo4j con Redis, o Consultas 10 y 11 que combinan Redis con MongoDB).
-- [ ] **Tarea 4.3 — Respuestas Teóricas Obligatorias:**
-  - *Pregunta 1:* ¿Cómo se implementó el vencimiento de reservas? Explicar la eliminación pasiva de Redis por TTL (10m) y cómo la fórmula de disponibilidad libera automáticamente las entradas sin procesos en segundo plano.
-  - *Pregunta 2:* ¿Qué datos quedaron en más de una base y cómo se garantiza que no se desincronicen? Explicar el rol de MongoDB como fuente de verdad, Neo4j para la topología de la red y Redis como caché/stock en tiempo real. Explicar las funciones atómicas de actualización en cascada.
-  - *Pregunta 3:* ¿Qué problemas de consistencia aparecieron al eliminar datos y cómo se resolvieron? Explicar la eliminación de Tomás Herrera (preservación de compras desvinculadas contablemente vs. borrado en cascada) y la eliminación de amistades en Neo4j sin tocar MongoDB por estar sanitizado.
-- [ ] **Tarea 4.4 — Capturas y Salidas:** Asegurar que todas las celdas del notebook conserven sus outputs visibles.
+- [ ] **Tarea 4.1 — Anexo 1: Reseñas de Eventos (MongoDB)**
+  - **Estado en código:** Implementado en [`src/appendix.py`](src/appendix.py) (`create_event_review`, `validate_event_review`, `seed_sample_reviews`, `get_average_ratings_per_event`, `get_average_ratings_per_artist`, `demonstrate_reviews_flow`).
+  - **Requerimientos de negocio:**
+    - Permitir a un usuario calificar (1 a 5) y comentar un evento pasado (`fecha < FECHA_REFERENCIA`).
+    - Validar que el usuario posea una compra confirmada para dicho evento (`estado == "confirmada"`).
+    - Garantizar unicidad estricta (máximo una sola reseña por usuario y evento) mediante índice único compuesto en MongoDB (`{"usuario_id": 1, "evento_id": 1}`).
+    - Demostrar en código un caso válido exitoso y un caso rechazado con captura de excepción.
+    - Sembrar y persistir al menos 6 reseñas de diferentes usuarios.
+    - Calcular y exhibir promedios de calificación por evento y por artista (agregando todos los eventos en los que participa el artista).
+  - **Acción notebook:** Agregar celdas interactivas en `TP_Integrador.ipynb` ejecutando la validación, la carga de las 6 reseñas y la visualización de los DataFrames de promedios por evento y por artista.
+
+- [ ] **Tarea 4.2 — Anexo 2: Historial de Precios y Gráfico de Evolución (MongoDB + Matplotlib)**
+  - **Estado en código:** Implementado en [`src/appendix.py`](src/appendix.py) (`init_price_history`, `register_price_change`, `seed_sample_price_changes`, `get_event_price_at_date`, `get_event_price_history`, `plot_event_price_evolution`, `demonstrate_price_history_flow`).
+  - **Requerimientos de negocio:**
+    - Registrar cada variación de precio de un evento con su fecha de vigencia asociada.
+    - Considerar el precio inicial del dataset vigente a partir de `2026-01-01`.
+    - Registrar al menos 3 cambios de precio cronológicos sobre un mismo evento (ej. "Cóndores en vivo" / Evento 1).
+    - Consultar el precio vigente de un evento en una fecha determinada cualquiera (`get_event_price_at_date`).
+    - Graficar la evolución temporal del precio mediante un gráfico escalonado (*step plot*) con Matplotlib, visualizando fechas y precios históricos con formato adecuado.
+  - **Acción notebook:** Agregar celdas interactivas en `TP_Integrador.ipynb` ejecutando la inicialización del historial, los 3 cambios, consultas a fechas específicas y el renderizado del gráfico de evolución.
+
+- [x] **Tarea 4.3 — Anexo 3: Recomendación de Dos Saltos (Neo4j)**
+  - **Estado en código:** Implementado en [`src/appendix.py`](src/appendix.py) (`recommend_events_two_hops`).
+  - **Estado en notebook:** Integrado y probado en `TP_Integrador.ipynb` (celda 36) con el usuario `"Sofía Martínez"` (quien conserva sus amistades tras las modificaciones).
+  - **Requerimientos de negocio:**
+    - Recomendar eventos futuros de artistas similares a los que siguen los amigos del usuario.
+    - Navegación Cypher en 2 saltos: `(:Usuario)-[:AMIGO_DE]-(:Usuario)-[:SIGUE]->(:Artista)-[:SIMILAR_A]->(:Artista)-[:PARTICIPA_EN]->(:Evento)`.
+    - Exclusión estricta de artistas que el usuario ya sigue directamente (`NOT (u)-[:SIGUE]->(recArt)`).
+    - Exclusión estricta de eventos para los cuales el usuario ya tiene compra confirmada (`NOT (u)-[:COMPRO {estado: 'confirmada'}]->(ev)`).
+    - Proyectar evento, artista y fecha, ordenados cronológicamente.
+    - Ejecutar con un usuario que conserve sus amistades tras las modificaciones o posicionar la demostración antes de la Sección 5.
+
+- [ ] **Tarea 4.4 — Anexo 4: Historial de Búsquedas por Usuario y Recomendación Personalizada (Redis + Python)**
+  - **Estado en código:** Pendiente de desarrollo en [`src/appendix.py`](src/appendix.py).
+  - **Requerimientos de negocio:**
+    - Almacenar las últimas 5 búsquedas de cada usuario en Redis utilizando una estructura de Lista (`LPUSH` + `LTRIM 0 4`), descartando automáticamente las búsquedas más antiguas para mantener tamaño fijo O(1).
+    - Implementar `record_user_search(user_id, search_term, genre, redis_client)` y `get_user_recent_searches(user_id, redis_client)`.
+    - Implementar función de ordenamiento personalizado `recommend_events_two_hops_personalized(user, driver, db_mongo, redis_client)`:
+      - Obtener las recomendaciones de dos saltos del Punto 3.
+      - Obtener el historial reciente de búsquedas del usuario desde Redis.
+      - Priorizar en primer lugar aquellos eventos cuyo género coincida con alguna búsqueda reciente del usuario, preservando subcriterios cronológicos.
+  - **Acción notebook:** Agregar celdas en `TP_Integrador.ipynb` simulando búsquedas recientes en Redis para el usuario objetivo, mostrando su historial y desplegando la tabla de recomendaciones reordenada por coincidencia de género.
 
 ---
 
-### 🔹 Fase 5: Validación End-to-End y Empaquetado para Entrega
+### 🔹 Fase 5: Redacción del Informe Conceptual (Sección 6 e Informe del Anexo)
+**Objetivo:** Desarrollar en celdas de Markdown dentro del notebook (o como documento adjunto) las explicaciones técnicas, teóricas y justificaciones arquitectónicas exigidas por la cátedra para el trabajo principal y el Anexo.
+
+- [ ] **Tarea 5.1 — Arquitectura Políglota:** Cuadro/diagrama consolidado de qué se almacena en cada motor y su justificación técnica.
+- [ ] **Tarea 5.2 — Integración e Identificadores:** Explicar cómo se integran las bases (IDs canónicos compartidos `usuario_id`, `evento_id`, etc.) y qué consultas combinan más de una base (ej. Consulta 4 que combina Neo4j con Redis, o Consultas 10 y 11 que combinan Redis con MongoDB).
+- [ ] **Tarea 5.3 — Respuestas Teóricas Obligatorias:**
+  - *Pregunta 1:* ¿Cómo se implementó el vencimiento de reservas? Explicar la eliminación pasiva de Redis por TTL (10m) y cómo la fórmula de disponibilidad libera automáticamente las entradas sin procesos en segundo plano.
+  - *Pregunta 2:* ¿Qué datos quedaron en más de una base y cómo se garantiza que no se desincronicen? Explicar el rol de MongoDB como fuente de verdad, Neo4j para la topología de la red y Redis como caché/stock en tiempo real. Explicar las funciones atómicas de actualización en cascada.
+  - *Pregunta 3:* ¿Qué problemas de consistencia aparecieron al eliminar datos y cómo se resolvieron? Explicar la eliminación de Tomás Herrera (preservación de compras desvinculadas contablemente vs. borrado en cascada) y la eliminación de amistades en Neo4j sin tocar MongoDB por estar sanitizado.
+- [ ] **Tarea 5.4 — Justificación Arquitectónica del Anexo:** Explicar en el informe qué estructura y qué motor de base de datos se eligió para cada uno de los cuatro puntos del Anexo y justificar el porqué técnico (MongoDB para documentos y colecciones analíticas de reseñas e historial de precios; Neo4j para el grafo de dos saltos; Redis con Listas FIFO acotadas por `LTRIM` para baja latencia de sesión).
+- [ ] **Tarea 5.5 — Capturas y Salidas:** Asegurar que todas las celdas del notebook conserven sus outputs visibles.
+
+---
+
+### 🔹 Fase 6: Validación End-to-End y Empaquetado para Entrega
 **Objetivo:** Certificar la idempotencia, reproducibilidad y empaquetado del proyecto según las pautas de entrega.
 
-- [ ] **Tarea 5.1:** Reiniciar el kernel y ejecutar todas las celdas de principio a fin (*Restart Kernel and Run All Cells*) en un entorno Docker limpio.
-- [ ] **Tarea 5.2:** Verificar que no se produzcan excepciones no controladas ni advertencias de deprecación.
-- [ ] **Tarea 5.3:** Validar que [`requirements.txt`](requirements.txt) refleje exactamente las versiones compatibles del contenedor.
-- [ ] **Tarea 5.4:** Empaquetar el archivo `.zip` de entrega con el notebook ejecutado, el informe y el archivo de requerimientos.
+- [ ] **Tarea 6.1:** Reiniciar el kernel y ejecutar todas las celdas de principio a fin (*Restart Kernel and Run All Cells*) en un entorno Docker limpio.
+- [ ] **Tarea 6.2:** Verificar que no se produzcan excepciones no controladas ni advertencias de deprecación.
+- [ ] **Tarea 6.3:** Validar que [`requirements.txt`](requirements.txt) refleje exactamente las versiones compatibles del contenedor.
+- [ ] **Tarea 6.4:** Empaquetar el archivo `.zip` de entrega con el notebook ejecutado, el informe y el archivo de requerimientos.
 
 ---
 
@@ -162,3 +216,13 @@ Este registro audita los hallazgos técnicos, vulnerabilidades de negocio y desf
   - **Ubicación:** `notebooks/TP_Integrador.ipynb`
   - **Detalle:** El notebook actualmente concluye en la celda de la Consulta 12. Faltan las celdas ejecutables de la **Sección 4** (Estadísticas y gráficos con Matplotlib) y de la **Sección 5** (Modificaciones multibase con evidencia).
   - **Acción requerida:** Incorporar las celdas correspondientes consumiendo `src/analytics.py` y `src/modifications.py`.
+
+- [ ] **BUG-09: Falta implementar el Punto 4 del Anexo en `src/appendix.py` (Historial de Búsquedas en Redis)**
+  - **Ubicación:** `src/appendix.py`
+  - **Detalle:** El archivo `appendix.py` incluye implementaciones para los puntos 1, 2 y 3, pero carece de las funciones para el registro de las últimas 5 búsquedas por usuario en Redis (`LPUSH` + `LTRIM`) y el reordenamiento de recomendaciones por género coincidente.
+  - **Acción requerida:** Desarrollar `record_user_search`, `get_user_recent_searches` y `recommend_events_two_hops_personalized`.
+
+- [ ] **BUG-10: Celdas de los Puntos 1, 2 y 4 del Anexo pendientes en el Notebook `TP_Integrador.ipynb`**
+  - **Ubicación:** `notebooks/TP_Integrador.ipynb`
+  - **Detalle:** Solo el Punto 3 (Recomendación de dos saltos) se encuentra actualmente integrado en el notebook. Faltan las celdas interactivas para Reseñas de Eventos (Punto 1), Historial y Gráfico de Precios (Punto 2) e Historial de Búsquedas con Recomendación Personalizada (Punto 4).
+  - **Acción requerida:** Agregar las celdas ejecutables con outputs correspondientes antes de la entrega final.
