@@ -19,7 +19,7 @@
 | **2. Flujo de Compra y Transacciones** | [`src/purchase.py`](src/purchase.py) | `[x] Completo` | `[x] Integrado` | Sesiones (30m), reservas (10m), confirmación atómica y 3 casos de prueba. |
 | **3. Consultas Políglotas (12)** | [`src/queries.py`](src/queries.py) | `[x] Completo` | `[x] Integrado` | 12 consultas con nombres, filtros temporales y ordenamientos correctos. |
 | **4. Estadísticas y Gráficos** | [`src/analytics.py`](src/analytics.py) | `[x] Completo` | `[x] Integrado` | Lógica estadística y visualizaciones Matplotlib integradas en el notebook. |
-| **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[ ] Pendiente` | Mutaciones 5.1 a 5.5 listas con evidencias; pendiente volcado al notebook. |
+| **5. Modificaciones Multibase** | [`src/modifications.py`](src/modifications.py) | `[x] Completo` | `[x] Integrado` | Mutaciones 5.1 a 5.5 listas con evidencias; volcadas al notebook con ejecuciones. |
 | **6. Informe Conceptual** | `notebooks/` / PDF | `[ ] Pendiente` | `[ ] Pendiente` | Justificaciones de diseño, consistencia, TTL y respuestas teóricas obligatorias. |
 | **Anexo (Grupos de 3 integrantes)** | Opcional / Pendiente | `[ ] Pendiente` | `[ ] Pendiente` | Reseñas, historial de precios, recomendación de dos saltos y búsquedas de usuario. |
 
@@ -64,24 +64,24 @@ graph LR
 ### 🔹 Fase 3: Integración de la Sección 5 en el Notebook (`TP_Integrador.ipynb`)
 **Objetivo:** Demostrar interactivamente en el notebook las 5 modificaciones multibase exigidas, evidenciando el estado previo y posterior al cambio en cada motor involucrado.
 
-- [ ] **Tarea 3.1 — Modificación 5.1:** Aumento del 10% en el precio de eventos futuros en Rosario.
+- [x] **Tarea 3.1 — Modificación 5.1:** Aumento del 10% en el precio de eventos futuros en Rosario.
   - Celda de evidencia previa (`get_city_events_price_evidence`).
   - Celda de ejecución (`increase_future_events_price`).
   - Celda de evidencia posterior verificando precios en MongoDB y Neo4j, demostrando que las compras anteriores no cambiaron.
-- [ ] **Tarea 3.2 — Modificación 5.2:** Agregar servicio `"accesibilidad"` al lugar con ID 2 (Sala Diagonal).
+- [x] **Tarea 3.2 — Modificación 5.2:** Agregar servicio `"accesibilidad"` al lugar con ID 2 (Sala Diagonal).
   - Celda de evidencia previa (`get_place_services_evidence`).
   - Celda de ejecución (`add_service_to_place`).
   - Celda de evidencia posterior verificando la lista de servicios.
-- [ ] **Tarea 3.3 — Modificación 5.3:** Cancelación integral del evento 7 ("Radio Neón Tour").
+- [x] **Tarea 3.3 — Modificación 5.3:** Cancelación integral del evento 7 ("Radio Neón Tour").
   - Celda de evidencia previa (`get_cancelled_event_evidence`).
   - Celda de ejecución (`cancel_event`).
   - Celda de evidencia posterior verificando: estado cancelado en Mongo y Neo4j, compras en estado `"reembolsada"`, stock y capacidad en 0 en Redis, reservas destruidas y exclusión en recomendaciones.
-- [ ] **Tarea 3.4 — Modificación 5.4:** Eliminación del usuario Tomás Herrera (ID 6).
+- [x] **Tarea 3.4 — Modificación 5.4:** Eliminación del usuario Tomás Herrera (ID 6).
   - Celda de evidencia previa (`get_deleted_user_evidence`).
   - Celda con Markdown justificando la decisión de **anonimizar compras** para resguardar la consistencia contable.
   - Celda de ejecución (`delete_user`).
   - Celda de evidencia posterior demostrando: eliminación en MongoDB, disociación de aristas `:AMIGO_DE` y `:SIGUE` en Neo4j, destrucción de sesión en Redis y preservación de compras con `usuario_id = null`.
-- [ ] **Tarea 3.5 — Modificación 5.5:** Eliminación de amistades de un usuario a elección (Juan López).
+- [x] **Tarea 3.5 — Modificación 5.5:** Eliminación de amistades de un usuario a elección (Juan López).
   - Celda de evidencia previa (`get_user_friendships_evidence`).
   - Celda de ejecución (`delete_user_friendships`).
   - Celda de evidencia posterior confirmando 0 relaciones `:AMIGO_DE` para dicho usuario en Neo4j.
@@ -158,7 +158,7 @@ Este registro audita los hallazgos técnicos, vulnerabilidades de negocio y desf
   - **Detalle:** `analytics.py` tiene visualizadores para *Seguidores por artista* y *Entradas por lugar*, pero en `queries.py` no estaban creadas las funciones para extraer esos datos directamente desde Neo4j/MongoDB.
   - **Resolución:** Se implementaron `get_artist_followers_count(driver)` y `get_tickets_sold_per_venue(driver)` utilizando consultas Cypher parametrizadas con `OPTIONAL MATCH`.
 
-- [ ] **BUG-08: Desconexión de Secciones 4 y 5 en el Notebook `TP_Integrador.ipynb`**
+- [X] **BUG-08: Desconexión de Secciones 4 y 5 en el Notebook `TP_Integrador.ipynb`**
   - **Ubicación:** `notebooks/TP_Integrador.ipynb`
   - **Detalle:** El notebook actualmente concluye en la celda de la Consulta 12. Faltan las celdas ejecutables de la **Sección 4** (Estadísticas y gráficos con Matplotlib) y de la **Sección 5** (Modificaciones multibase con evidencia).
   - **Acción requerida:** Incorporar las celdas correspondientes consumiendo `src/analytics.py` y `src/modifications.py`.

@@ -61,6 +61,10 @@ Este documento define el contexto, las directrices de arquitectura y los estánd
    * Toda función debe ser **parametrizable**, aceptando argumentos con valores por defecto centralizados en `src/config.py`.
    * Si las consignas mencionan entidades por su nombre (ej. *"Lucía Romero"* o *"Los Cóndores Eléctricos"*), las funciones deben **resolver dinámicamente** sus IDs contra la base de datos (ej. consultando en MongoDB), nunca asumiendo IDs fijos en el código.
    * URIs de conexión, nombres de bases de datos, colecciones y puertos deben configurarse en `src/config.py` o variables de entorno, exponiendo helpers de conexión reutilizables.
+6. **Apego Estricto a las Consignas (Prohibición de Atributos o Lógica No Solicitada):**
+   * Queda estrictamente prohibido inventar o incorporar campos, atributos, parámetros, tablas o reglas que no hayan sido solicitadas explícitamente en `CONSIGNAS.md` (por ejemplo, no agregar motivos de cambio, justificaciones o metadatos inventados si la consigna no lo exige).
+   * La implementación debe ceñirse exactamente a lo pedido: satisfacer los requerimientos al 100% sin añadir complejidades innecesarias ni sobre-especificar esquemas.
+   * Reutilizar código preexistente solo cuando resulte oportuno, limpio y conveniente; en caso contrario, implementar funciones nuevas modulares.
 
 ---
 
