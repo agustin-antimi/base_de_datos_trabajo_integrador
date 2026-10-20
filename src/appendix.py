@@ -4,9 +4,11 @@ Implementa la validación y gestión de reseñas de eventos pasados con compra c
 así como el registro temporal y visualización gráfica del historial de precios de eventos.
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Optional, Union
 
+import redis
 from neo4j import Driver
 from pymongo.database import Database
 
@@ -26,6 +28,9 @@ try:
         DEFAULT_REVIEWS_COLLECTION,
         DEFAULT_SAMPLE_PRICE_CHANGES,
         DEFAULT_SAMPLE_REVIEWS,
+        DEFAULT_SAMPLE_USER_SEARCHES,
+        DEFAULT_USER_RECENT_SEARCHES_LIMIT,
+        DEFAULT_USER_SEARCHES_KEY_PREFIX,
         MAX_REVIEW_RATING,
         MIN_REVIEW_RATING,
         REFERENCE_DATE,
@@ -39,6 +44,9 @@ except ImportError:
         DEFAULT_REVIEWS_COLLECTION,
         DEFAULT_SAMPLE_PRICE_CHANGES,
         DEFAULT_SAMPLE_REVIEWS,
+        DEFAULT_SAMPLE_USER_SEARCHES,
+        DEFAULT_USER_RECENT_SEARCHES_LIMIT,
+        DEFAULT_USER_SEARCHES_KEY_PREFIX,
         MAX_REVIEW_RATING,
         MIN_REVIEW_RATING,
         REFERENCE_DATE,
@@ -1487,4 +1495,361 @@ def recommend_events_two_hops(
         "ref_date": reference_date,
     }
     return execute_neo4j_query(driver_neo4j, query=query, parameters=parameters)
+
+
+# ==============================================================================
+# ANEXO: PUNTO 4 - HISTORIAL DE BÚSQUEDAS POR USUARIO Y RECOMENDACIÓN PERSONALIZADA
+# ==============================================================================
+
+
+def _build_user_searches_key(
+    user_id: int,
+    key_prefix_template: str = DEFAULT_USER_SEARCHES_KEY_PREFIX,
+) -> str:
+    """Construye la clave estandarizada de Redis para el historial de búsquedas del usuario.
+
+    Args:
+        user_id: Identificador numérico del usuario.
+        key_prefix_template: Plantilla de clave con marcador {user_id}.
+
+    Returns:
+        Cadena con la clave formateada (ej. 'user:1:recent_searches').
+    """
+    return key_prefix_template.format(user_id=user_id)
+
+
+def record_user_search(
+    user: Union[int, str],
+    search_term: str,
+    genre: str,
+    redis_client: redis.Redis,
+    db_mongo: Optional[Database] = None,
+    limit: int = DEFAULT_USER_RECENT_SEARCHES_LIMIT,
+) -> dict[str, Any]:
+    """Registra una búsqueda reciente de un usuario en Redis manteniendo una lista fija acotada.
+
+    Aplica la regla de negocio del Anexo 4:
+    - Almacena en Redis usando una Lista (`LPUSH`).
+    - Recorta la lista a un tamaño máximo de `limit` elementos (`LTRIM 0 limit - 1`),
+      descartando automáticamente las búsquedas más viejas en complejidad temporal O(1).
+
+    Args:
+        user: Identificador numérico o nombre completo del usuario.
+        search_term: Término de búsqueda o consulta textual introducida por el usuario.
+        genre: Género musical asociado a la búsqueda (ej. 'rock', 'electrónica').
+        redis_client: Cliente de conexión a Redis.
+        db_mongo: Instancia opcional de MongoDB para resolución dinámica del usuario.
+        limit: Cantidad máxima de búsquedas recientes a conservar. Por defecto 5.
+
+    Returns:
+        Diccionario con los detalles de la búsqueda persistida y el total almacenado.
+
+    Raises:
+        ValueError: Si el término de búsqueda o el género están vacíos.
+    """
+    if not isinstance(search_term, str) or not search_term.strip():
+        raise ValueError("El término de búsqueda no puede ser vacío.")
+    if not isinstance(genre, str) or not genre.strip():
+        raise ValueError("El género musical asociado a la búsqueda no puede ser vacío.")
+
+    user_id: int
+    user_name: str
+    if db_mongo is not None:
+        try:
+            user_id, user_name = resolve_user(db_mongo, user)
+        except Exception:
+            user_id = user if isinstance(user, int) else 0
+            user_name = str(user)
+    else:
+        user_id = user if isinstance(user, int) else 0
+        user_name = str(user)
+
+    normalized_genre = genre.strip().lower()
+    clean_term = search_term.strip()
+
+    payload = {
+        "search_term": clean_term,
+        "genero": normalized_genre,
+        "fecha": datetime.now(timezone.utc).isoformat(),
+    }
+
+    key = _build_user_searches_key(user_id)
+    # 1. Insertar al principio de la lista (más reciente en índice 0)
+    redis_client.lpush(key, json.dumps(payload))
+    # 2. Recortar para mantener únicamente las últimas 'limit' búsquedas (O(1))
+    redis_client.ltrim(key, 0, limit - 1)
+
+    total_count = redis_client.llen(key)
+    return {
+        "usuario_id": user_id,
+        "usuario_nombre": user_name,
+        "search_term": clean_term,
+        "genero": normalized_genre,
+        "total_almacenadas": total_count,
+        "clave_redis": key,
+    }
+
+
+def get_user_recent_searches(
+    user: Union[int, str],
+    redis_client: redis.Redis,
+    db_mongo: Optional[Database] = None,
+    limit: int = DEFAULT_USER_RECENT_SEARCHES_LIMIT,
+) -> list[dict[str, Any]]:
+    """Obtiene el historial de búsquedas recientes de un usuario desde Redis.
+
+    Recupera los elementos de la lista en orden cronológico inverso (de más reciente a más antiguo).
+
+    Args:
+        user: Identificador numérico o nombre completo del usuario.
+        redis_client: Cliente de conexión a Redis.
+        db_mongo: Instancia opcional de MongoDB para resolución dinámica del usuario.
+        limit: Cantidad máxima de búsquedas a retornar. Por defecto 5.
+
+    Returns:
+        Lista de diccionarios con 'search_term', 'genero' y 'fecha' de cada búsqueda.
+    """
+    user_id: int
+    if db_mongo is not None:
+        try:
+            user_id, _ = resolve_user(db_mongo, user)
+        except Exception:
+            user_id = user if isinstance(user, int) else 0
+    else:
+        user_id = user if isinstance(user, int) else 0
+
+    key = _build_user_searches_key(user_id)
+    raw_items = redis_client.lrange(key, 0, limit - 1)
+
+    searches: list[dict[str, Any]] = []
+    for item in raw_items:
+        try:
+            data = json.loads(item)
+            searches.append(data)
+        except (json.JSONDecodeError, TypeError):
+            searches.append({"search_term": str(item), "genero": "desconocido"})
+
+    return searches
+
+
+def seed_sample_user_searches(
+    user: Union[int, str],
+    redis_client: redis.Redis,
+    db_mongo: Optional[Database] = None,
+    sample_searches: Optional[list[dict[str, str]]] = None,
+    limit: int = DEFAULT_USER_RECENT_SEARCHES_LIMIT,
+) -> list[dict[str, Any]]:
+    """Carga un conjunto de búsquedas de ejemplo en Redis para un usuario.
+
+    Limpia las búsquedas previas e inserta las nuevas en orden cronológico,
+    demostrando la preservación de las últimas 5 búsquedas.
+
+    Args:
+        user: Identificador numérico o nombre del usuario.
+        redis_client: Cliente de conexión a Redis.
+        db_mongo: Instancia opcional de MongoDB.
+        sample_searches: Lista opcional de diccionarios con 'search_term' y 'genre'.
+            Por defecto utiliza DEFAULT_SAMPLE_USER_SEARCHES de config.py.
+        limit: Límite máximo de búsquedas por usuario. Por defecto 5.
+
+    Returns:
+        Lista con el historial de búsquedas resultante en Redis.
+    """
+    user_id: int
+    if db_mongo is not None:
+        try:
+            user_id, _ = resolve_user(db_mongo, user)
+        except Exception:
+            user_id = user if isinstance(user, int) else 0
+    else:
+        user_id = user if isinstance(user, int) else 0
+
+    key = _build_user_searches_key(user_id)
+    redis_client.delete(key)
+
+    searches = sample_searches if sample_searches is not None else DEFAULT_SAMPLE_USER_SEARCHES
+    for item in searches:
+        record_user_search(
+            user=user_id,
+            search_term=item.get("search_term", ""),
+            genre=item.get("genre", item.get("genero", "")),
+            redis_client=redis_client,
+            db_mongo=db_mongo,
+            limit=limit,
+        )
+
+    return get_user_recent_searches(user=user_id, redis_client=redis_client, db_mongo=db_mongo, limit=limit)
+
+
+def recommend_events_two_hops_personalized(
+    user: Union[int, str],
+    driver_neo4j: Driver,
+    db_mongo: Database,
+    redis_client: redis.Redis,
+    reference_date: str = REFERENCE_DATE,
+    limit_searches: int = DEFAULT_USER_RECENT_SEARCHES_LIMIT,
+) -> list[dict[str, Any]]:
+    """Recomienda eventos en dos saltos reordenados según el historial de búsquedas del usuario.
+
+    Aplica la regla de negocio del Anexo 4:
+    1. Obtiene las recomendaciones de dos saltos de Neo4j (amigos -> siguen -> similares -> eventos).
+    2. Consulta en Redis las últimas 5 búsquedas realizadas por el usuario.
+    3. Extrae los géneros musicales presentes en el historial de búsquedas recientes.
+    4. Reordena la lista priorizando primero los eventos cuyo género coincida con alguna
+       búsqueda reciente del usuario, preservando el subcriterio cronológico.
+
+    Args:
+        user: Identificador numérico o nombre completo del usuario objetivo.
+        driver_neo4j: Driver de conexión a Neo4j para ejecutar la consulta Cypher.
+        db_mongo: Instancia de base de datos de MongoDB.
+        redis_client: Cliente de conexión a Redis para consultar el historial de búsquedas.
+        reference_date: Fecha de corte en formato ISO (YYYY-MM-DD). Por defecto '2026-10-01'.
+        limit_searches: Cantidad de búsquedas recientes a considerar. Por defecto 5.
+
+    Returns:
+        Lista de diccionarios con recomendaciones ordenadas con:
+        'evento_id', 'evento', 'artista', 'fecha', 'genero', 'amigos_seguidores',
+        'coincide_busqueda' (bool) y 'generos_buscados_recientes' (list[str]).
+    """
+    user_id, user_name = resolve_user(db_mongo, user)
+
+    # 1. Obtener recomendaciones base de dos saltos desde Neo4j
+    base_recommendations = recommend_events_two_hops(
+        user=user_id,
+        driver_neo4j=driver_neo4j,
+        db_mongo=db_mongo,
+        reference_date=reference_date,
+    )
+
+    if not base_recommendations:
+        return []
+
+    # 2. Consultar historial reciente de búsquedas en Redis
+    recent_searches = get_user_recent_searches(
+        user=user_id,
+        redis_client=redis_client,
+        db_mongo=db_mongo,
+        limit=limit_searches,
+    )
+
+    # Extraer conjunto de géneros únicos buscados recientemente (en minúsculas)
+    recent_genres: set[str] = {
+        str(s.get("genero", "")).strip().lower()
+        for s in recent_searches
+        if s.get("genero")
+    }
+
+    # 3. Enriquecer cada recomendación con la bandera de coincidencia
+    enriched_recommendations: list[dict[str, Any]] = []
+    for rec in base_recommendations:
+        item = dict(rec)
+        ev_genre = str(item.get("genero", "")).strip().lower()
+        matches = ev_genre in recent_genres
+        item["coincide_busqueda"] = matches
+        # Atributo numérico de prioridad para ordenamiento estable (0 = coincide, 1 = no coincide)
+        item["_sort_priority"] = 0 if matches else 1
+        item["generos_buscados_recientes"] = sorted(list(recent_genres))
+        enriched_recommendations.append(item)
+
+    # 4. Ordenamiento:
+    # Criterio 1: Eventos con coincidencia de género primero (_sort_priority ASC: 0 antes que 1)
+    # Criterio 2: Fecha del evento ascendente (más próximos primero)
+    # Criterio 3: Nombre del evento alfabético
+    enriched_recommendations.sort(
+        key=lambda x: (
+            x["_sort_priority"],
+            str(x.get("fecha", "")),
+            str(x.get("evento", "")),
+        )
+    )
+
+    # Limpiar clave temporal de ordenamiento interno
+    for item in enriched_recommendations:
+        item.pop("_sort_priority", None)
+
+    return enriched_recommendations
+
+
+def demonstrate_user_searches_flow(
+    user: Union[int, str],
+    driver_neo4j: Driver,
+    db_mongo: Database,
+    redis_client: redis.Redis,
+    reference_date: str = REFERENCE_DATE,
+) -> dict[str, Any]:
+    """Demuestra integralmente todos los requerimientos del Punto 4 del Anexo.
+
+    1. Consulta las recomendaciones de dos saltos base (Punto 3).
+    2. Simula el registro de búsquedas en Redis verificando el tope de 5 con LPUSH + LTRIM.
+    3. Consulta las búsquedas vigentes desde Redis.
+    4. Genera y despliega las recomendaciones personalizadas con géneros coincidentes priorizados.
+
+    Args:
+        user: Identificador o nombre del usuario de prueba (ej. 'Sofía Martínez').
+        driver_neo4j: Driver de conexión a Neo4j.
+        db_mongo: Instancia de base de datos de MongoDB.
+        redis_client: Cliente de conexión a Redis.
+        reference_date: Fecha de corte para eventos futuros.
+
+    Returns:
+        Diccionario con las búsquedas registradas, recomendaciones base y personalizadas.
+    """
+    user_id, user_name = resolve_user(db_mongo, user)
+
+    print("=" * 80)
+    print("DEMOSTRACIÓN: HISTORIAL DE BÚSQUEDAS Y RECOMENDACIÓN PERSONALIZADA (ANEXO - PUNTO 4)")
+    print("=" * 80)
+
+    # 1. Recomendaciones base
+    base_recs = recommend_events_two_hops(
+        user=user_id,
+        driver_neo4j=driver_neo4j,
+        db_mongo=db_mongo,
+        reference_date=reference_date,
+    )
+    print(f"\n--- 1. Recomendaciones base de dos saltos para '{user_name}' (ID {user_id}) ---")
+    print(f"Total recomendados: {len(base_recs)}")
+    for r in base_recs:
+        print(f"  * {r['evento']} | Artista: {r['artista']} | Género: {r['genero']} | Fecha: {r['fecha']}")
+
+    # 2. Registrar búsquedas en Redis (demostrando descarte de la más antigua al superar 5)
+    print(f"\n--- 2. Registrando búsquedas recientes en Redis para '{user_name}' (LPUSH + LTRIM 0 4) ---")
+    searches = seed_sample_user_searches(
+        user=user_id,
+        redis_client=redis_client,
+        db_mongo=db_mongo,
+    )
+    print(f"Búsquedas activas en Redis (últimas 5 registradas, más reciente primero):")
+    for idx, s in enumerate(searches, start=1):
+        print(f"  {idx}. Término: \"{s['search_term']}\" -> Género: [{s['genero']}]")
+
+    # 3. Recomendaciones personalizadas
+    personalized_recs = recommend_events_two_hops_personalized(
+        user=user_id,
+        driver_neo4j=driver_neo4j,
+        db_mongo=db_mongo,
+        redis_client=redis_client,
+        reference_date=reference_date,
+    )
+
+    print(f"\n--- 3. Recomendaciones personalizadas ordenadas por género coincidente ---")
+    for r in personalized_recs:
+        coincide_str = "SÍ (Priorizado)" if r.get("coincide_busqueda") else "NO"
+        print(
+            f"  * {r['evento']:<18} | Género: {r['genero']:<12} "
+            f"| Coincide Búsqueda: {coincide_str:<15} | Fecha: {r['fecha']}"
+        )
+
+    print("\n" + "=" * 80)
+    print("FIN DE LA DEMOSTRACIÓN: Historial de búsquedas en Redis y ordenamiento validados.")
+    print("=" * 80)
+
+    return {
+        "user_id": user_id,
+        "user_name": user_name,
+        "base_recommendations": base_recs,
+        "recent_searches": searches,
+        "personalized_recommendations": personalized_recs,
+    }
+
 

@@ -155,6 +155,19 @@ DEFAULT_SAMPLE_PRICE_CHANGES: list[dict[str, Any]] = [
 ]
 
 
+# Parámetros y valores por defecto para el Anexo (Punto 4: Historial de Búsquedas en Redis)
+DEFAULT_USER_RECENT_SEARCHES_LIMIT: int = 5
+DEFAULT_USER_SEARCHES_KEY_PREFIX: str = "user:{user_id}:recent_searches"
+
+DEFAULT_SAMPLE_USER_SEARCHES: list[dict[str, str]] = [
+    {"search_term": "festivales electrónica 2026", "genre": "electrónica"},
+    {"search_term": "recitales al aire libre", "genre": "rock"},
+    {"search_term": "bandas de sintetizadores", "genre": "electrónica"},
+    {"search_term": "solistas acústicos", "genre": "folk"},
+    {"search_term": "fechas de pulso nocturno", "genre": "electrónica"},
+]
+
+
 def _is_running_in_docker() -> bool:
     """Verifica si el proceso actual se ejecuta dentro de un contenedor Docker.
 
