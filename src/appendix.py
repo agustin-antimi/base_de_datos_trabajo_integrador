@@ -23,6 +23,8 @@ except ImportError:
 
 try:
     from config import (
+        DEFAULT_DELETE_USER_ID,
+        DEFAULT_DELETE_USER_NAME,
         DEFAULT_INITIAL_PRICE_DATE,
         DEFAULT_PRICE_HISTORY_EVENT_NAME,
         DEFAULT_REVIEWS_COLLECTION,
@@ -39,6 +41,8 @@ try:
     from queries import execute_mongo_aggregation, execute_neo4j_query
 except ImportError:
     from src.config import (
+        DEFAULT_DELETE_USER_ID,
+        DEFAULT_DELETE_USER_NAME,
         DEFAULT_INITIAL_PRICE_DATE,
         DEFAULT_PRICE_HISTORY_EVENT_NAME,
         DEFAULT_REVIEWS_COLLECTION,
@@ -548,10 +552,100 @@ def seed_sample_reviews(
         if user_target is None or event_target is None:
             continue
 
-        # Resolver identidades
-        u_id, u_name = resolve_user(db_mongo, user_target)
+        # Resolver evento objetivo
         e_id, e_name, _, _ = resolve_event(db_mongo, event_target)
+        event_doc = db_mongo.eventos.find_one({"evento_id": e_id})
+        event_artists = _get_event_artists(db_mongo, event_id=e_id, driver_neo4j=driver_neo4j)
+        artistas_ids = [art["artista_id"] for art in event_artists]
+        artistas_nombres = [art["nombre"] for art in event_artists]
 
+        # Resolver identidades de usuario (activo o previamente eliminado/anonimizado)
+        is_deleted_user = False
+        u_id: Optional[int] = None
+        u_name: str = ""
+
+        try:
+            u_id, u_name = resolve_user(db_mongo, user_target)
+        except ValueError:
+            # Caso Usuario Eliminado (ej. Tomás Herrera tras la modificación 5.4):
+            # Se detecta si el usuario fue dado de baja previamente en el sistema.
+            if (
+                user_target in (DEFAULT_DELETE_USER_NAME, DEFAULT_DELETE_USER_ID, "Tomás Herrera", 6)
+                or db_mongo.compras.find_one({"usuario_eliminado": True, "notas": {"$regex": str(user_target)}}) is not None
+            ):
+                is_deleted_user = True
+                u_id = DEFAULT_DELETE_USER_ID
+                u_name = str(DEFAULT_DELETE_USER_NAME)
+            else:
+                raise
+
+        # ----------------------------------------------------------------------
+        # Caso Usuario Eliminado: Persistir reseña histórica de forma anonimizada
+        # ----------------------------------------------------------------------
+        if is_deleted_user:
+            # Comprobar idempotencia: si ya existe una reseña anonimizada para este evento y usuario
+            existing_anon = db_mongo[collection_name].find_one({
+                "evento_id": e_id,
+                "usuario_eliminado": True,
+                "notas": {"$regex": str(u_name)},
+            })
+            if existing_anon:
+                clean_exist = dict(existing_anon)
+                clean_exist.pop("_id", None)
+                created_reviews.append(clean_exist)
+                continue
+
+            # Acreditar asistencia histórica: asegurar compra confirmada previa a la baja
+            existing_purchase = db_mongo.compras.find_one({
+                "evento_id": e_id,
+                "usuario_eliminado": True,
+                "notas": {"$regex": str(u_name)},
+                "estado": "confirmada",
+            })
+            if not existing_purchase:
+                max_compra = db_mongo.compras.find_one(sort=[("compra_id", -1)])
+                next_compra_id = (int(max_compra["compra_id"]) + 1) if (max_compra and "compra_id" in max_compra) else 1
+                price = int(event_doc.get("precio", 25000)) if event_doc else 25000
+                db_mongo.compras.insert_one({
+                    "compra_id": next_compra_id,
+                    "usuario_id": None,
+                    "usuario_eliminado": True,
+                    "evento_id": e_id,
+                    "cantidad": 1,
+                    "precio_unitario": price,
+                    "total": price,
+                    "fecha_compra": "2026-08-01",
+                    "estado": "confirmada",
+                    "notas": f"Compra anonimizada tras baja del usuario '{u_name}' (ID anterior: {u_id}).",
+                })
+
+            # Generar siguiente resena_id correlativo
+            max_rev = db_mongo[collection_name].find_one(sort=[("resena_id", -1)])
+            next_rev_id = (int(max_rev["resena_id"]) + 1) if (max_rev and "resena_id" in max_rev) else 1
+
+            anon_review_doc = {
+                "resena_id": next_rev_id,
+                "usuario_id": None,
+                "usuario_eliminado": True,
+                "usuario_nombre": "Usuario Anónimo",
+                "evento_id": e_id,
+                "evento_nombre": e_name,
+                "artistas_ids": artistas_ids,
+                "artistas_nombres": artistas_nombres,
+                "calificacion": rating,
+                "comentario": comment,
+                "fecha_resena": review_date or "2026-08-20",
+                "notas": f"Reseña histórica anonimizada tras la baja del usuario '{u_name}' (ID anterior: {u_id}).",
+            }
+            db_mongo[collection_name].insert_one(anon_review_doc)
+            clean_rev = dict(anon_review_doc)
+            clean_rev.pop("_id", None)
+            created_reviews.append(clean_rev)
+            continue
+
+        # ----------------------------------------------------------------------
+        # Caso Usuario Activo Estándar
+        # ----------------------------------------------------------------------
         # Si ya existe reseña para este par (usuario, evento), no duplicar
         existing = db_mongo[collection_name].find_one({"usuario_id": u_id, "evento_id": e_id})
         if existing:
@@ -583,10 +677,10 @@ def seed_sample_reviews(
         )
         created_reviews.append(review)
 
-    distinct_users = len({r["usuario_id"] for r in created_reviews})
+    distinct_users = len({r["usuario_id"] if r.get("usuario_id") is not None else r.get("notas", "anon") for r in created_reviews})
     print(
-        f"[Reseñas] {len(created_reviews)} reseñas activas en total "
-        f"de {distinct_users} usuarios distintos."
+        f"[Reseñas] {len(created_reviews)} reseñas en total "
+        f"({distinct_users} usuarios distintos históricos, incluyendo reseñas anonimizadas)."
     )
     return created_reviews
 
@@ -653,6 +747,7 @@ def get_average_ratings_per_event(
                 "genero": {"$ifNull": ["$evento_info.genero", ""]},
                 "promedio_calificacion": {"$round": ["$promedio_calificacion", 2]},
                 "cantidad_resenas": 1,
+                "total_resenas": "$cantidad_resenas",
                 "calificaciones": 1,
             }
         },
@@ -701,6 +796,7 @@ def get_average_ratings_per_artist(
                a.genero AS genero,
                round(avg(toFloat(r.calificacion)), 2) AS promedio_calificacion,
                count(r) AS cantidad_resenas,
+               count(r) AS total_resenas,
                collect(DISTINCT e.nombre) AS eventos_evaluados
         ORDER BY promedio_calificacion DESC, a.nombre ASC
         """
@@ -739,6 +835,7 @@ def get_average_ratings_per_artist(
                 "genero": {"$ifNull": ["$artista_info.genero", "Desconocido"]},
                 "promedio_calificacion": {"$round": ["$promedio_calificacion", 2]},
                 "cantidad_resenas": 1,
+                "total_resenas": "$cantidad_resenas",
                 "eventos_evaluados": 1,
             }
         },
