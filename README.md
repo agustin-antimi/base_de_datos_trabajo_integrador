@@ -5,6 +5,13 @@
 > **Institución:** Universidad Nacional de La Plata (UNLP 2026)  
 > **Tecnologías:** Python 3.11, MongoDB, Neo4j, Redis, Docker, JupyterLab
 
+
+* **Integrantes:**
+  * Morales Russo, Ramiro (018976/1)
+  * Antimi, Agustin (17816/1)
+  * Massaccesi, Agustin (018705/8)
+
+
 ---
 
 ## 📋 Descripción del Proyecto
